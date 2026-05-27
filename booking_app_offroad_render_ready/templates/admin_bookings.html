@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bokningar | Offroad Bumpis</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+  <style>
+    body{font-family:Arial,sans-serif;padding:20px;background:#f7f7fb;color:#111827}.logo{width:260px;margin-bottom:18px}table{width:100%;border-collapse:collapse;background:white}th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top}th{background:#111827;color:white}button,.button{padding:7px 10px;border:0;border-radius:999px;background:#111827;color:white;text-decoration:none;font-weight:700;cursor:pointer;margin:2px}.confirmed{color:green}.paid{color:green}.booked_unpaid{color:#9a6700}.pending{color:#9a6700}.released{color:#64748b}.rejected{color:#b91c1c}@media(max-width:900px){table{font-size:12px}}
+  </style>
+</head>
+<body>
+<img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Offroad Bumpis">
+<h1>Alla bokningar</h1>
+<table>
+<thead><tr><th>Period</th><th>Barn</th><th>Vuxen</th><th>Pris</th><th>Rabatt</th><th>Kund</th><th>Kontakt</th><th>Plats</th><th>Status</th><th>Betalning / åtgärd</th><th>Dokument</th></tr></thead>
+<tbody>
+{% for b in bookings %}
+<tr>
+<td>{{ b.period_text }}</td>
+<td>{{ b.child_count }}</td>
+<td>{{ b.adult_count }}</td>
+<td>{{ b.price_from }} kr</td>
+<td>{% if b.coupon_code %}{{ b.coupon_code }}<br>{{ b.discount_percent }}%{% else %}–{% endif %}</td>
+<td>{{ b.name }}</td>
+<td>{{ b.email }}<br>{{ b.phone }}</td>
+<td>{{ b.location }}<br>{{ 'Leverans' if b.deliver else 'Hämtning' }}{% if b.return_delivery %}<br>Återleverans/hämtning{% endif %}</td>
+<td class="{{ b.status }}">{{ b.status }}</td>
+<td>
+{% if b.status == 'booked_unpaid' %}
+  <form method="post" action="{{ url_for('admin_update_booking', booking_id=b.id, action='paid') }}" style="display:inline"><button>Markera betald</button></form>
+  <form method="post" action="{{ url_for('admin_update_booking', booking_id=b.id, action='release') }}" style="display:inline"><button>Släpp bokning</button></form>
+{% elif b.status == 'pending' %}
+  <form method="post" action="{{ url_for('admin_update_booking', booking_id=b.id, action='confirm') }}" style="display:inline"><button>Bekräfta</button></form>
+  <form method="post" action="{{ url_for('admin_update_booking', booking_id=b.id, action='reject') }}" style="display:inline"><button>Avvisa</button></form>
+{% else %}
+  –
+{% endif %}
+</td>
+<td>{% if b.case_id %}<a class="button" href="{{ url_for('admin_case_view', booking_id=b.id) }}">Visa</a>{% else %}–{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<p><a href="{{ url_for('booking_form') }}">Bokningsformulär</a> · <a href="{{ url_for('admin_logout') }}">Logga ut</a></p>
+</body>
+</html>

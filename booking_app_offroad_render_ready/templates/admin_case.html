@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hyrescase | Offroad Bumpis</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+  <style>
+    body{font-family:Arial,sans-serif;max-width:960px;margin:0 auto;padding:20px;background:#f7f7fb}
+    .card{background:white;padding:20px;border-radius:16px;margin-bottom:16px;box-shadow:0 8px 28px rgba(0,0,0,.08)}
+    code{word-break:break-all;background:#f1f5f9;padding:4px;border-radius:6px;display:inline-block}
+    input,textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}
+    button,.button{display:inline-block;padding:10px 14px;border:0;border-radius:999px;background:#111827;color:white;text-decoration:none;font-weight:700;margin-top:8px}
+    .verify{background:#ecfdf3;border:1px solid #bbf7d0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .check{display:flex;align-items:center;gap:10px;margin:9px 0;font-weight:700}
+    .check input{width:auto}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Hyrescase #{{ booking.id }}</h1>
+    <p><b>Kund:</b> {{ booking.name }}<br><b>Period:</b> {{ booking.start_date }} till {{ booking.end_date }}<br><b>Bollar:</b> Barn {{ booking.child_count }}, vuxen {{ booking.adult_count }}<br><b>Rabattkod:</b> {{ booking.coupon_code or "-" }}{% if booking.discount_percent %} ({{ booking.discount_percent }}%){% endif %}</p>
+  </div>
+
+  <div class="card verify">
+    <h2>Publik verifiering</h2>
+    <p>Denna länk visar case och SHA-256-hashar utan kundens e-post eller telefon.</p>
+    {% if case.verification_token %}
+      <p><a href="{{ url_for('public_verify', token=case.verification_token, _external=True) }}">{{ url_for('public_verify', token=case.verification_token, _external=True) }}</a></p>
+    {% else %}
+      <p>Ingen verifieringstoken finns på detta case ännu.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Dokument</h2>
+    <p><strong>Dokumenten är SHA-256-hashade.</strong> Hashvärdet står under varje dokument. Hashregistret samlar alla hashvärden i en separat verifierings-PDF.</p>
+
+    {% if case.hash_register_file %}
+      <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.hash_register_file|basename) }}">Hashregister / verifieringskvitto</a><br><code>{{ case.hash_register_hash }}</code></p>
+    {% endif %}
+
+    {% if case.payment_invoice_file %}
+      <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.payment_invoice_file|basename) }}">Faktura / betalningsuppgifter</a><br><code>{{ case.payment_invoice_hash }}</code></p>
+    {% endif %}
+
+    <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.agreement_file|basename) }}">Hyresavtal</a><br><code>{{ case.agreement_hash }}</code></p>
+    <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.terms_file|basename) }}">Villkor</a><br><code>{{ case.terms_hash }}</code></p>
+    <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.handover_file|basename) }}">Checklista utlämning</a><br><code>{{ case.handover_hash }}</code></p>
+    <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.return_file|basename) }}">Checklista återlämning</a><br><code>{{ case.return_hash }}</code></p>
+
+    {% if case.handover_control_file %}
+      <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.handover_control_file|basename) }}">Ifylld utlämningskontroll</a><br><code>{{ case.handover_control_hash }}</code></p>
+    {% endif %}
+
+    {% if case.return_control_file %}
+      <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.return_control_file|basename) }}">Ifylld återlämningskontroll</a><br><code>{{ case.return_control_hash }}</code></p>
+    {% endif %}
+
+    {% if case.damage_invoice_file %}
+      <p><a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=case.damage_invoice_file|basename) }}">Skadefaktura</a><br><code>{{ case.damage_invoice_hash }}</code></p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Digital utlämningskontroll</h2>
+    <form method="post" action="{{ url_for('admin_handover_control', booking_id=booking.id) }}">
+      <div class="grid">
+        <div>
+          <label>Utlämnade barnbollar</label>
+          <input type="number" name="handed_child" min="0" max="12" value="{{ booking.child_count }}">
+        </div>
+        <div>
+          <label>Utlämnade vuxenbollar</label>
+          <input type="number" name="handed_adult" min="0" max="12" value="{{ booking.adult_count }}">
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" name="handover_count_ok"> Antal utlämnade bollar stämmer</label>
+      <label class="check"><input type="checkbox" name="handover_condition_ok"> Ventiler, remmar och synliga skador är kontrollerade och OK vid utlämning</label>
+      <label class="check"><input type="checkbox" name="pump_included"> Pump, batteri/laddare och instruktioner är lämnade enligt bokning</label>
+      <label class="check"><input type="checkbox" name="rules_reviewed"> Tillåtna underlag och säkerhetsregler är genomgångna</label>
+      <label>Anteckningar</label>
+      <textarea name="handover_notes" rows="4" placeholder="Exempel: allt OK, kunden fick pump och säkerhetsregler genomgångna..."></textarea>
+      <button>Spara utlämningskontroll</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Digital återlämningskontroll</h2>
+    <form method="post" action="{{ url_for('admin_return_control', booking_id=booking.id) }}">
+      <div class="grid">
+        <div>
+          <label>Återlämnade barnbollar</label>
+          <input type="number" name="returned_child" min="0" max="12" value="{{ booking.child_count }}">
+        </div>
+        <div>
+          <label>Återlämnade vuxenbollar</label>
+          <input type="number" name="returned_adult" min="0" max="12" value="{{ booking.adult_count }}">
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" name="returned_count_ok"> Antal återlämnade bollar stämmer</label>
+      <label class="check"><input type="checkbox" name="condition_ok"> Ventiler, remmar och synliga skador är kontrollerade och OK</label>
+      <label class="check"><input type="checkbox" name="cleaning_needed"> Rengöring behövs</label>
+      <label class="check"><input type="checkbox" name="damage_invoice_needed"> Skadefaktura behöver skapas</label>
+      <label>Anteckningar</label>
+      <textarea name="return_notes" rows="4" placeholder="Exempel: allt OK, eller 1 boll smutsig, ventil behöver kollas..."></textarea>
+      <button>Spara återlämningskontroll</button>
+    </form>
+  </div>
+
+  {% if not case.damage_invoice_file %}
+  <div class="card">
+    <h2>Skapa skadefaktura</h2>
+    <form method="post" action="{{ url_for('admin_damage_invoice', booking_id=booking.id) }}">
+      <label>Beskrivning</label>
+      <textarea name="damage_description" rows="4"></textarea>
+      <label>Belopp kr</label>
+      <input name="damage_cost" type="number" step="0.01" min="0">
+      <button>Skapa skadefaktura</button>
+    </form>
+  </div>
+  {% endif %}
+  <p><a href="{{ url_for('admin_bookings') }}">Tillbaka</a></p>
+</body>
+</html>
