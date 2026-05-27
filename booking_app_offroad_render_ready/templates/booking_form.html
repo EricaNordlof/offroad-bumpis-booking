@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boka bumperballs | Offroad Bumpis</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+  <style>
+    :root { --green:#0f5f2f; --green-dark:#0b3b1f; --mint:#ecfdf3; --mint-border:#bbf7d0; --navy:#111827; }
+    body { font-family: Arial, sans-serif; max-width: 920px; margin: 0 auto; padding: 24px; background:#f7f7fb; color:#111827; }
+    .brand { display:flex; justify-content:center; margin-bottom:18px; }
+    .brand img { width:min(260px, 78vw); height:auto; display:block; }
+    .card { background:white; padding:26px; border-radius:18px; box-shadow:0 8px 28px rgba(0,0,0,.08); }
+    h1 { margin:0 0 10px; font-size:34px; }
+    .info { background:var(--mint); border:1px solid var(--mint-border); border-radius:14px; padding:14px; margin:14px 0; }
+    .price-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0 10px; }
+    .price-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px; }
+    .price-card h3 { margin:0 0 8px; }
+    .price-table { width:100%; border-collapse:collapse; font-size:15px; }
+    .price-table th, .price-table td { padding:6px 0; border-bottom:1px solid #e5e7eb; text-align:left; }
+    .price-table tr:last-child td, .price-table tr:last-child th { border-bottom:0; }
+    label { display:block; margin-top:14px; font-weight:700; }
+    input, textarea, select { width:100%; padding:11px; border:1px solid #cbd5e1; border-radius:10px; box-sizing:border-box; }
+    button, .button { display:inline-block; margin-top:18px; padding:12px 18px; border:0; border-radius:999px; background:var(--navy); color:white; text-decoration:none; font-weight:700; cursor:pointer; }
+    .error { background:#fee2e2; border:1px solid #fecaca; padding:12px; border-radius:10px; font-weight:700; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    small { color:#475569; }
+    .checkbox { display:flex; gap:10px; align-items:center; margin-top:12px; font-weight:700; }
+    .checkbox input { width:auto; margin:0; }
+    .price-preview { background:#ecfdf3; border:1px solid #bbf7d0; border-radius:12px; padding:12px; margin-top:12px; font-weight:700; }
+    .section-title { margin-top:24px; margin-bottom:8px; font-size:24px; }
+    .addon-grid, .zone-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:12px 0; }
+    .zone-grid { grid-template-columns:repeat(4,1fr); }
+    .mini-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:14px; box-shadow:0 3px 14px rgba(0,0,0,.04); }
+    .mini-card h3 { margin:0 0 8px; font-size:18px; }
+    .mini-card .price { display:block; font-size:26px; line-height:1.1; font-weight:900; color:#143b20; margin-bottom:8px; }
+    .note { background:#fff8dd; border:1px solid #fde68a; border-radius:14px; padding:13px; margin:12px 0; font-weight:700; color:#513b08; }
+    .subtle { color:#475569; }
+    @media(max-width:700px){ .row,.price-grid,.addon-grid,.zone-grid{grid-template-columns:1fr;} body{padding:12px;} .card{padding:18px;} h1{font-size:28px;} }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="Offroad Bumpis logga">
+  </div>
+
+  <div class="card">
+    <h1>Boka bumperballs direkt</h1>
+    <p>Boka direkt. Din bokning reserveras direkt och faktura skickas automatiskt till din e-post.</p>
+
+    <div class="info">
+      <strong>Helgpris:</strong> Bokar du en fredag gäller hyran från fredag kl. 08 till söndag kl. 20, till samma pris.<br>
+      <strong>Barnbollar:</strong> 12 st finns nu. <strong>Vuxenbollar:</strong> 12 st kan bokas från och med {{ adult_available_from_sv }}.<br>
+      <strong>Kalender:</strong> Visar 6 månader framåt.<br><strong>Betalning:</strong> Faktura skickas direkt. Betalning ska vara inne senast 3 arbetsdagar före utlämning, annars släpps bokningen.
+    </div>
+
+    <div class="price-grid">
+      <div class="price-card">
+        <h3>Barnbollar</h3>
+        <table class="price-table">
+          <tbody>
+            {% for count, price in child_price_ladder.items() if count > 0 %}
+            <tr><th>{{ count }} bollar</th><td>{{ price }} kr</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="price-card">
+        <h3>Vuxenbollar</h3>
+        <table class="price-table">
+          <tbody>
+            {% for count, price in adult_price_ladder.items() if count > 0 %}
+            <tr><th>{{ count }} bollar</th><td>{{ price }} kr</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <small>Bokningsbara från {{ adult_available_from_sv }}.</small>
+      </div>
+    </div>
+
+    <h2 class="section-title">Tillval</h2>
+    <p class="subtle">Tillval gör upplägget enklare om ni vill ha extra struktur, transporthjälp eller turneringskänsla.</p>
+    <div class="addon-grid">
+      <div class="mini-card">
+        <h3>Turneringskit</h3>
+        <span class="price">1 000 kr</span>
+        <p>För kalas, skola, fritids och förening som vill ha mer struktur.</p>
+        <small>Diplom, poängmallar, pokal, visselpipa, reflexer, lagvästar, knäskydd, koner, markörer och skumfotboll.</small>
+      </div>
+      <div class="mini-card">
+        <h3>Kombibil</h3>
+        <span class="price">500 kr</span>
+        <p>Per dygn vid hyra av större paket om ni vill hämta själv men saknar rätt transport.</p>
+        <small>Passar bäst för 10–12 bollar. Bokas tillsammans med bumperballs.</small>
+      </div>
+      <div class="mini-card">
+        <h3>Ellådcykel</h3>
+        <span class="price">350 kr</span>
+        <p>Per dygn vid mindre paket inom Malmö.</p>
+        <small>För 2 bollar inom Malmö. Smidig lösning om ni saknar bil.</small>
+      </div>
+    </div>
+
+    <h2 class="section-title">Leveranszoner</h2>
+    <p class="note">Hämta själv: 0 kr. Leveranspriset gäller per enkel väg. Om du vill ha både leverans och återleverans väljer du båda i bokningen. Exempel: Z3 kostar 700 kr enkel väg eller 1 400 kr tur och retur.</p>
+    <div class="zone-grid">
+      <div class="mini-card"><h3>Z1</h3><span class="price">500 kr</span><p>Malmö.</p></div>
+      <div class="mini-card"><h3>Z2</h3><span class="price">600 kr</span><p>Burlöv, Lomma, Staffanstorp.</p></div>
+      <div class="mini-card"><h3>Z3</h3><span class="price">700 kr</span><p>Lund, Svedala, Vellinge.</p></div>
+      <div class="mini-card"><h3>Z4</h3><span class="price">800 kr</span><p>Eslöv, Kävlinge, Trelleborg.</p></div>
+      <div class="mini-card"><h3>Z5</h3><span class="price">900 kr</span><p>Höör, Hörby, Skurup.</p></div>
+      <div class="mini-card"><h3>Z6</h3><span class="price">1 000 kr</span><p>Landskrona, Ystad, Sjöbo.</p></div>
+      <div class="mini-card"><h3>Z7</h3><span class="price">1 100 kr</span><p>Helsingborg, Ängelholm, Bjuv, Åstorp, Höganäs, Svalöv, Klippan, Perstorp, Båstad.</p></div>
+      <div class="mini-card"><h3>Z8</h3><span class="price">1 200 kr</span><p>Kristianstad, Hässleholm, Osby, Bromölla, Östra Göinge, Simrishamn, Tomelilla, Örkelljunga.</p></div>
+    </div>
+
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <form method="post">
+      <label for="date">Startdatum</label>
+      <input type="date" id="date" name="date" value="{{ form_data.date if form_data else '' }}" required>
+      <small>Väljer du fredag räknas bokningen som helg: fredag kl. 08 till söndag kl. 20.</small>
+
+      <div class="row">
+        <div>
+          <label for="child">Barnbollar</label>
+          <input type="number" id="child" name="child" min="0" max="12" step="2" value="{{ form_data.child if form_data else 0 }}">
+          <small>Max 12 st. Bokas i jämna antal: 2, 4, 6, 8, 10 eller 12.</small>
+        </div>
+        <div>
+          <label for="adult">Vuxenbollar</label>
+          <input type="number" id="adult" name="adult" min="0" max="12" step="2" value="{{ form_data.adult if form_data else 0 }}">
+          <small>Kan bokas i jämna antal från {{ adult_available_from_sv }}.</small>
+        </div>
+      </div>
+
+      <label for="name">Namn</label>
+      <input id="name" name="name" value="{{ form_data.name if form_data else '' }}" required>
+      <label for="email">E-post</label>
+      <input id="email" name="email" type="email" value="{{ form_data.email if form_data else '' }}" required>
+      <label for="phone">Telefon / meddelande vid betalning</label>
+      <input id="phone" name="phone" value="{{ form_data.phone if form_data else '' }}" required>
+      <label for="location">Plats / leveransadress</label>
+      <input id="location" name="location" value="{{ form_data.location if form_data else '' }}">
+
+      <h2 class="section-title">Välj tillval</h2>
+      <label class="checkbox">
+        <input type="checkbox" id="tournament_kit" name="tournament_kit" {% if form_data and form_data.tournament_kit %}checked{% endif %}>
+        Turneringskit +1 000 kr
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="car_rental" name="car_rental" {% if form_data and form_data.car_rental %}checked{% endif %}>
+        Kombibil +500 kr
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="cargo_bike" name="cargo_bike" {% if form_data and form_data.cargo_bike %}checked{% endif %}>
+        Ellådcykel +350 kr
+      </label>
+
+      <h2 class="section-title">Leverans</h2>
+      <label class="checkbox"><input type="checkbox" id="deliver" name="deliver" {% if form_data and form_data.deliver %}checked{% endif %}> Jag vill ha leverans</label>
+      <label class="checkbox"><input type="checkbox" id="return_delivery" name="return_delivery" {% if form_data and form_data.return_delivery %}checked{% endif %}> Jag vill ha återleverans / hämtning efteråt</label>
+
+      <label for="delivery_zone">Leveranszon</label>
+      <select id="delivery_zone" name="delivery_zone">
+        {% for key, zone in delivery_zones.items() %}
+          <option value="{{ key }}" {% if form_data and form_data.delivery_zone == key %}selected{% endif %}>
+            {{ zone.label }} – {{ zone.price }} kr{% if key != 'pickup' %} enkel väg{% endif %} – {{ zone.places }}
+          </option>
+        {% endfor %}
+      </select>
+      <small>Leveranspriset räknas per enkel väg. Väljer du både leverans och återleverans räknas zonpriset två gånger.</small>
+
+      <label for="message">Meddelande</label>
+      <textarea id="message" name="message" rows="4">{{ form_data.message if form_data else '' }}</textarea>
+      <div class="price-preview" id="pricePreview">Pris från: 0 kr</div>
+      <button type="submit">Boka nu</button>
+      <a class="button" href="{{ url_for('calendar_view') }}">Visa kalender</a>
+    </form>
+  </div>
+<script>
+  const adultStart = "{{ adult_available_from }}";
+  const childInput = document.getElementById("child");
+  const adultInput = document.getElementById("adult");
+  const dateInput = document.getElementById("date");
+  const pricePreview = document.getElementById("pricePreview");
+  const childPrices = {{ child_price_ladder | tojson }};
+  const adultPrices = {{ adult_price_ladder | tojson }};
+  const addonPrices = {{ addon_prices | tojson }};
+  const deliveryZones = {{ delivery_zones | tojson }};
+  const tournamentInput = document.getElementById("tournament_kit");
+  const carInput = document.getElementById("car_rental");
+  const cargoInput = document.getElementById("cargo_bike");
+  const deliverInput = document.getElementById("deliver");
+  const returnInput = document.getElementById("return_delivery");
+  const zoneInput = document.getElementById("delivery_zone");
+
+  function getLadderPrice(map, count) {
+    return map[String(count)] ?? 0;
+  }
+
+  function updateFormHelp(){
+    if(dateInput.value && dateInput.value < adultStart){
+      adultInput.value = 0;
+      adultInput.disabled = true;
+      adultInput.title = "Vuxenbollar kan bokas från 1 september 2026";
+    } else {
+      adultInput.disabled = false;
+      adultInput.title = "";
+    }
+    const child = parseInt(childInput.value || "0", 10);
+    const adult = parseInt(adultInput.value || "0", 10);
+    const baseTotal = getLadderPrice(childPrices, child) + getLadderPrice(adultPrices, adult);
+    const addonTotal =
+      (tournamentInput.checked ? addonPrices.tournament_kit : 0) +
+      (carInput.checked ? addonPrices.car_rental : 0) +
+      (cargoInput.checked ? addonPrices.cargo_bike : 0);
+    const zone = deliveryZones[zoneInput.value] || deliveryZones.pickup;
+    const ways = (deliverInput.checked ? 1 : 0) + (returnInput.checked ? 1 : 0);
+    const deliveryTotal = zone.price * ways;
+    const total = baseTotal + addonTotal + deliveryTotal;
+    pricePreview.textContent = `Pris: ${total} kr (bollar ${baseTotal} kr + tillval ${addonTotal} kr + leverans ${deliveryTotal} kr)`;
+  }
+
+  dateInput.addEventListener("change", updateFormHelp);
+  childInput.addEventListener("input", updateFormHelp);
+  adultInput.addEventListener("input", updateFormHelp);
+  tournamentInput.addEventListener("change", updateFormHelp);
+  carInput.addEventListener("change", updateFormHelp);
+  cargoInput.addEventListener("change", updateFormHelp);
+  deliverInput.addEventListener("change", updateFormHelp);
+  returnInput.addEventListener("change", updateFormHelp);
+  zoneInput.addEventListener("change", updateFormHelp);
+  updateFormHelp();
+</script>
+</body>
+</html>
