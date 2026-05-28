@@ -389,6 +389,13 @@ AFFILIATE_COUPONS = {
     "BLLACA": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BLLACA09": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BEHAR-1026": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
+
+    "YNGVE10": {"name": "Yngve Aniedeh", "email": "yngveaniedeh@gmail.com"},
+    "ANNIKA-1026": {"name": "Annika Nordlöf", "email": "annikanordlof@outlook.com"},
+    "EMIL-1026": {"name": "Emil Aniedeh", "email": "emil.aniedeh2009@gmail.com"},
+    "HJP-1026": {"name": "Hitta Jippo", "email": "Hittajippo@outlook.com"},
+    "KOMPASS-1026": {"name": "Oliver", "email": "oliverlon20020@gmail.com"},
+    "BUMPIS-4827": {"name": "Katusergo7", "email": "katusergo7@gmail.com"},
 }
 
 
@@ -516,6 +523,7 @@ def send_affiliate_paid_email(booking) -> None:
     )
 
 
+
 def send_affiliate_cancelled_email(booking, reason: str) -> None:
     """Notify affiliate that a booking did not go through and should not count for provision."""
     coupon_code = booking_value(booking, "coupon_code")
@@ -537,8 +545,6 @@ def send_affiliate_cancelled_email(booking, reason: str) -> None:
             "Offroad Bumpis"
         ),
     )
-
-
 
 
 def ladder_price(count: int, ladder: dict[int, int]) -> int:
@@ -1627,42 +1633,67 @@ def booking_form():
 @app.route("/calendar")
 def calendar_view():
     release_unpaid_overdue_bookings()
-    today = date.today()
-    first_month = date(today.year, today.month, 1)
+
+    start_year = 2026
+    end_year = 2027
     months = []
-    for offset in range(6):
-        month_num = first_month.month + offset
-        year = first_month.year + (month_num - 1) // 12
-        month = ((month_num - 1) % 12) + 1
-        month_start = date(year, month, 1)
-        weeks = []
-        for week in pycalendar.monthcalendar(year, month):
-            week_data = []
-            for day in week:
-                if day == 0:
-                    week_data.append(None)
-                    continue
-                current = date(year, month, day)
-                d = current.isoformat()
-                available = remaining_on_date(d)
-                inventory = inventory_for_date(d)
-                adult_active = current >= ADULT_AVAILABLE_FROM
-                if available["barn"] == 0 and (not adult_active or available["vuxen"] == 0):
-                    color = "#f8d7da"
-                elif available["barn"] < inventory["barn"] or (adult_active and available["vuxen"] < inventory["vuxen"]):
-                    color = "#fff3cd"
-                else:
-                    color = "#d4edda"
-                week_data.append({"date": d, "available": available, "inventory": inventory, "color": color, "adult_active": adult_active})
-            weeks.append(week_data)
-        months.append({"month_name": month_start.strftime("%B"), "year": year, "weeks": weeks})
+
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            month_start = date(year, month, 1)
+            weeks = []
+
+            for week in pycalendar.monthcalendar(year, month):
+                week_data = []
+
+                for day in week:
+                    if day == 0:
+                        week_data.append(None)
+                        continue
+
+                    current = date(year, month, day)
+                    d = current.isoformat()
+                    available = remaining_on_date(d)
+                    inventory = inventory_for_date(d)
+                    adult_active = current >= ADULT_AVAILABLE_FROM
+
+                    if available["barn"] == 0 and (not adult_active or available["vuxen"] == 0):
+                        color = "#f8d7da"
+                    elif available["barn"] < inventory["barn"] or (adult_active and available["vuxen"] < inventory["vuxen"]):
+                        color = "#fff3cd"
+                    else:
+                        color = "#d4edda"
+
+                    week_data.append({
+                        "date": d,
+                        "available": available,
+                        "inventory": inventory,
+                        "color": color,
+                        "adult_active": adult_active,
+                    })
+
+                weeks.append(week_data)
+
+            months.append({
+                "month_name": month_start.strftime("%B"),
+                "year": year,
+                "month_number": month,
+                "weeks": weeks,
+            })
+
+    today = date.today()
     return render_template(
         "calendar.html",
         months=months,
         weekday_names=["Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön"],
         inventory=BALL_INVENTORY,
         adult_available_from_sv="1 september 2026",
+        calendar_start_year=start_year,
+        calendar_end_year=end_year,
+        current_year=today.year,
+        current_month=today.month,
     )
+
 
 
 @app.route("/admin")
