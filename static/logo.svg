@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" role="img" aria-label="Offroad Bumpis">
+  <rect width="520" height="120" rx="28" fill="#071b10"/>
+  <circle cx="68" cy="60" r="34" fill="#b8f05a"/>
+  <path d="M43 60h50M56 36c15 16 15 32 0 48M80 36c-15 16-15 32 0 48" stroke="#071b10" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <text x="120" y="54" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="900" fill="#ffffff">Offroad Bumpis</text>
+  <text x="120" y="83" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#b8f05a">Bumperballs i Skåne</text>
+</svg>

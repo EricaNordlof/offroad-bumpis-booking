@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verifiering | Offroad Bumpis</title>
+  <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+  <style>
+    body{font-family:Arial,sans-serif;max-width:860px;margin:0 auto;padding:22px;background:#f7f7fb;color:#111827}
+    .logo{display:block;width:min(240px,80vw);margin:0 auto 18px}
+    .card{background:white;padding:22px;border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.08);margin-bottom:16px}
+    code{word-break:break-all;background:#f1f5f9;padding:5px;border-radius:6px;display:inline-block}
+    .ok{background:#ecfdf3;border:1px solid #bbf7d0}
+    .bad{background:#fee2e2;border:1px solid #fecaca}
+  </style>
+</head>
+<body>
+  <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Offroad Bumpis">
+  {% if not found %}
+    <div class="card bad">
+      <h1>Verifiering hittades inte</h1>
+      <p>Kontrollera länken eller kontakta Offroad Bumpis.</p>
+    </div>
+  {% else %}
+    <div class="card ok">
+      <h1>Verifierat hyrescase</h1>
+      <p>Detta case finns i Offroad Bumpis dokumentationssystem.</p>
+      <p><b>Bokning:</b> #{{ case.booking_id }}<br>
+      <b>Period:</b> {{ case.period_text }}<br>
+      <b>Bollar:</b> Barn {{ case.child_count }}, vuxen {{ case.adult_count }}<br>
+      <b>Dokumentstatus:</b> {{ case.status }}</p>
+    </div>
+
+    <div class="card">
+      <h2>SHA-256-hashar</h2>
+      <p>Hasharna kan användas för att kontrollera att PDF-filerna inte har ändrats efter att de skapades.</p>
+      <p><b>Hyresavtal</b><br><code>{{ case.agreement_hash }}</code></p>
+      <p><b>Villkor</b><br><code>{{ case.terms_hash }}</code></p>
+      <p><b>Checklista utlämning</b><br><code>{{ case.handover_hash }}</code></p>
+      <p><b>Checklista återlämning</b><br><code>{{ case.return_hash }}</code></p>
+      {% if case.payment_invoice_hash %}
+        <p><b>Faktura / betalningsuppgifter</b><br><code>{{ case.payment_invoice_hash }}</code></p>
+      {% endif %}
+      {% if case.handover_control_hash %}
+        <p><b>Ifylld utlämningskontroll</b><br><code>{{ case.handover_control_hash }}</code></p>
+      {% endif %}
+      {% if case.return_control_hash %}
+        <p><b>Ifylld återlämningskontroll</b><br><code>{{ case.return_control_hash }}</code></p>
+      {% endif %}
+      {% if case.damage_invoice_hash %}
+        <p><b>Skadefaktura</b><br><code>{{ case.damage_invoice_hash }}</code></p>
+      {% endif %}
+      {% if case.hash_register_hash %}
+        <p><b>Hashregister</b><br><code>{{ case.hash_register_hash }}</code></p>
+      {% endif %}
+    </div>
+  {% endif %}
+</body>
+</html>
