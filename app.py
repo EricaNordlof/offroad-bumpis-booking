@@ -108,6 +108,10 @@ def init_db() -> None:
             name TEXT NOT NULL,
             email TEXT NOT NULL,
             phone TEXT,
+            customer_type TEXT NOT NULL DEFAULT 'private',
+            company_name TEXT,
+            org_number TEXT,
+            invoice_reference TEXT,
             location TEXT,
             deliver INTEGER NOT NULL DEFAULT 0,
             return_delivery INTEGER NOT NULL DEFAULT 0,
@@ -138,6 +142,14 @@ def init_db() -> None:
         db.execute("ALTER TABLE bookings ADD COLUMN coupon_code TEXT")
     if "discount_percent" not in columns:
         db.execute("ALTER TABLE bookings ADD COLUMN discount_percent INTEGER NOT NULL DEFAULT 0")
+    if "customer_type" not in columns:
+        db.execute("ALTER TABLE bookings ADD COLUMN customer_type TEXT NOT NULL DEFAULT 'private'")
+    if "company_name" not in columns:
+        db.execute("ALTER TABLE bookings ADD COLUMN company_name TEXT")
+    if "org_number" not in columns:
+        db.execute("ALTER TABLE bookings ADD COLUMN org_number TEXT")
+    if "invoice_reference" not in columns:
+        db.execute("ALTER TABLE bookings ADD COLUMN invoice_reference TEXT")
     db.commit()
 
     db.execute(
@@ -244,6 +256,29 @@ def dates_between(start_date_str: str, end_date_str: str) -> list[str]:
         days.append(current.isoformat())
         current += timedelta(days=1)
     return days
+
+
+def rental_day_count(start_date_str: str, end_date_str: str) -> int:
+    """Count price days for a booking period.
+
+    Normal weekdays count as one rental day each. A full Friday-Sunday period
+    counts as one rental day, matching the weekend rule on the booking page.
+    """
+    start = parse_date(start_date_str)
+    end = parse_date(end_date_str)
+    if end < start:
+        raise ValueError("end_date_before_start_date")
+
+    units = 0
+    current = start
+    while current <= end:
+        if current.weekday() == 4 and current + timedelta(days=2) <= end:
+            units += 1
+            current += timedelta(days=3)
+        else:
+            units += 1
+            current += timedelta(days=1)
+    return max(units, 1)
 
 
 def inventory_for_date(date_str: str) -> dict[str, int]:
@@ -358,6 +393,27 @@ def booking_value(booking, key: str, default=None):
     return default
 
 
+def customer_type_label(booking) -> str:
+    return "Företag" if booking_value(booking, "customer_type", "private") == "company" else "Privatperson"
+
+
+def customer_extra_lines(booking) -> list[str]:
+    """Return simple customer/faktura lines for emails and PDFs."""
+    lines: list[str] = [f"Bokar som: {customer_type_label(booking)}"]
+    company_name = booking_value(booking, "company_name") or ""
+    org_number = booking_value(booking, "org_number") or ""
+    invoice_reference = booking_value(booking, "invoice_reference") or ""
+
+    if company_name:
+        lines.append(f"Företag: {company_name}")
+    if org_number:
+        lines.append(f"Organisationsnummer: {org_number}")
+    if invoice_reference:
+        lines.append(f"Fakturareferens/PO: {invoice_reference}")
+
+    return lines
+
+
 def affiliate_for_coupon(code: str | None) -> dict[str, str] | None:
     return AFFILIATE_COUPONS.get(normalize_coupon_code(code))
 
@@ -413,14 +469,25 @@ def price_from(child_count: int, adult_count: int) -> int:
     return ladder_price(child_count, CHILD_PRICE_LADDER) + ladder_price(adult_count, ADULT_PRICE_LADDER)
 
 
-def addons_price(tournament_kit: int = 0, car_rental: int = 0, cargo_bike: int = 0) -> int:
+def addons_price(
+    tournament_kit: int = 0,
+    car_rental: int = 0,
+    cargo_bike: int = 0,
+    rental_days: int = 1,
+) -> int:
+    """Return addon price for the booking period.
+
+    Tournament kit is charged once per booking. Kombibil and ellådcykel are
+    charged per price day/rental day.
+    """
+    days = max(int(rental_days or 1), 1)
     total = 0
     if int(tournament_kit or 0):
         total += ADDON_PRICES["tournament_kit"]
     if int(car_rental or 0):
-        total += ADDON_PRICES["car_rental"]
+        total += ADDON_PRICES["car_rental"] * days
     if int(cargo_bike or 0):
-        total += ADDON_PRICES["cargo_bike"]
+        total += ADDON_PRICES["cargo_bike"] * days
     return total
 
 
@@ -439,11 +506,13 @@ def subtotal_price(
     tournament_kit: int = 0,
     car_rental: int = 0,
     cargo_bike: int = 0,
+    rental_days: int = 1,
 ) -> int:
+    days = max(int(rental_days or 1), 1)
     return (
-        price_from(child_count, adult_count)
+        price_from(child_count, adult_count) * days
         + delivery_price(deliver, return_delivery, delivery_zone)
-        + addons_price(tournament_kit, car_rental, cargo_bike)
+        + addons_price(tournament_kit, car_rental, cargo_bike, days)
     )
 
 
@@ -457,6 +526,7 @@ def total_price(
     car_rental: int = 0,
     cargo_bike: int = 0,
     coupon_code: str | None = None,
+    rental_days: int = 1,
 ) -> int:
     subtotal = subtotal_price(
         child_count,
@@ -467,11 +537,16 @@ def total_price(
         tournament_kit,
         car_rental,
         cargo_bike,
+        rental_days,
     )
     return total_after_discount(subtotal, coupon_discount_percent(coupon_code))
 
 
 def subtotal_price_for_booking(booking) -> int:
+    rental_days = rental_day_count(
+        booking_value(booking, "start_date"),
+        booking_value(booking, "end_date"),
+    )
     return subtotal_price(
         int(booking_value(booking, "child_count", 0) or 0),
         int(booking_value(booking, "adult_count", 0) or 0),
@@ -481,6 +556,7 @@ def subtotal_price_for_booking(booking) -> int:
         int(booking_value(booking, "tournament_kit", 0) or 0),
         int(booking_value(booking, "car_rental", 0) or 0),
         int(booking_value(booking, "cargo_bike", 0) or 0),
+        rental_days,
     )
 
 
@@ -498,13 +574,44 @@ def booking_discount_amount(booking) -> int:
 
 def selected_addons_text(booking) -> str:
     selected = []
+    rental_days = rental_day_count(booking["start_date"], booking["end_date"])
     if int(booking["tournament_kit"] or 0):
         selected.append(f"{ADDON_LABELS['tournament_kit']} ({sek(ADDON_PRICES['tournament_kit'])})")
     if int(booking["car_rental"] or 0):
-        selected.append(f"{ADDON_LABELS['car_rental']} ({sek(ADDON_PRICES['car_rental'])})")
+        selected.append(f"{ADDON_LABELS['car_rental']} ({sek(ADDON_PRICES['car_rental'])} × {rental_days} hyresdagar)")
     if int(booking["cargo_bike"] or 0):
-        selected.append(f"{ADDON_LABELS['cargo_bike']} ({sek(ADDON_PRICES['cargo_bike'])})")
+        selected.append(f"{ADDON_LABELS['cargo_bike']} ({sek(ADDON_PRICES['cargo_bike'])} × {rental_days} hyresdagar)")
     return ", ".join(selected) if selected else "-"
+
+
+def selected_addon_terms(booking) -> list[str]:
+    terms: list[str] = []
+
+    if int(booking_value(booking, "tournament_kit", 0) or 0):
+        terms.append(
+            "Turneringskit: lagvästar, knäskydd, koner, markörer och skumfotboll ska återlämnas vid retur."
+        )
+        terms.append(
+            "Turneringskit: diplom, poängmallar, pokal, visselpipa och reflexer får kunden behålla."
+        )
+
+    if int(booking_value(booking, "car_rental", 0) or 0):
+        terms.append(
+            "Kombibil: fria mil ingår. Bilen är en enklare äldre kombibil med värde cirka 15 000 kr."
+        )
+        terms.append(
+            "Kombibil: bilen har trafikförsäkring. Normalt slitage ingår. Vårdslöshet, skador, böter, avgifter och saknad utrustning debiteras."
+        )
+
+    if int(booking_value(booking, "cargo_bike", 0) or 0):
+        terms.append(
+            "Ellådcykel: får användas för upp till 4 bollar inom Malmö. Batteriladdare ingår."
+        )
+        terms.append(
+            "Ellådcykel: värde cirka 15 000 kr. Normalt slitage ingår. Vårdslöshet, skador, stöld/förlust, saknat batteri eller saknad laddare debiteras."
+        )
+
+    return terms
 
 
 def send_email(to_email: str, subject: str, body: str, attachments: Optional[list[str]] = None) -> None:
@@ -645,9 +752,12 @@ def sek(amount: int | float) -> str:
 def generate_payment_invoice_pdf(booking: sqlite3.Row, case_path: Path) -> str:
     """Create payment invoice with bank transfer, Swish and Stripe payment options."""
     path = case_path / "faktura_betalning.pdf"
-    child_price = CHILD_PRICE_LADDER.get(int(booking["child_count"]), 0)
-    adult_price = ADULT_PRICE_LADDER.get(int(booking["adult_count"]), 0)
-    addon_total = addons_price(booking["tournament_kit"], booking["car_rental"], booking["cargo_bike"])
+    rental_days = rental_day_count(booking["start_date"], booking["end_date"])
+    child_unit_price = CHILD_PRICE_LADDER.get(int(booking["child_count"]), 0)
+    adult_unit_price = ADULT_PRICE_LADDER.get(int(booking["adult_count"]), 0)
+    child_price = child_unit_price * rental_days
+    adult_price = adult_unit_price * rental_days
+    addon_total = addons_price(booking["tournament_kit"], booking["car_rental"], booking["cargo_bike"], rental_days)
     delivery_total = delivery_price(booking["deliver"], booking["return_delivery"], booking["delivery_zone"])
     subtotal = subtotal_price_for_booking(booking)
     discount_percent = int(booking_value(booking, "discount_percent", 0) or 0)
@@ -669,21 +779,23 @@ def generate_payment_invoice_pdf(booking: sqlite3.Row, case_path: Path) -> str:
         f"Fakturanummer: OB-{int(booking['id']):04d}",
         f"Bokning: #{booking['id']}",
         f"Kund: {booking['name']}",
+        *customer_extra_lines(booking),
         f"E-post: {booking['email']}",
         f"Telefon: {booking['phone'] or '-'}",
         f"Period: {format_period(booking['start_date'], booking['end_date'])}",
+        f"Hyresdagar/prisdagar: {rental_days}",
         f"Betalas senast: {due_date} (3 arbetsdagar före utlämning)",
         "",
         "Specifikation",
-        f"Barnbollar: {booking['child_count']} st – {sek(child_price)}",
-        f"Vuxenbollar: {booking['adult_count']} st – {sek(adult_price)}",
+        f"Barnbollar: {booking['child_count']} st – {sek(child_unit_price)} × {rental_days} = {sek(child_price)}",
+        f"Vuxenbollar: {booking['adult_count']} st – {sek(adult_unit_price)} × {rental_days} = {sek(adult_price)}",
     ]
     if int(booking["tournament_kit"] or 0):
         lines.append(f"Turneringskit – {sek(ADDON_PRICES['tournament_kit'])}")
     if int(booking["car_rental"] or 0):
-        lines.append(f"Kombibil – {sek(ADDON_PRICES['car_rental'])}")
+        lines.append(f"Kombibil – {sek(ADDON_PRICES['car_rental'])} × {rental_days} = {sek(ADDON_PRICES['car_rental'] * rental_days)}")
     if int(booking["cargo_bike"] or 0):
-        lines.append(f"Ellådcykel – {sek(ADDON_PRICES['cargo_bike'])}")
+        lines.append(f"Ellådcykel – {sek(ADDON_PRICES['cargo_bike'])} × {rental_days} = {sek(ADDON_PRICES['cargo_bike'] * rental_days)}")
     if ways:
         lines.append(f"Leveranszon: {zone['label']} – {sek(zone['price'])} per enkel väg")
         if int(booking["deliver"] or 0):
@@ -929,9 +1041,11 @@ def generate_agreement_pdf(booking: sqlite3.Row, case_path: Path) -> str:
     lines = [
         f"Bokning: #{booking['id']}",
         f"Hyrestagare: {booking['name']}",
+        *customer_extra_lines(booking),
         f"E-post: {booking['email']}",
         f"Telefon: {booking['phone'] or '-'}",
         f"Period: {format_period(booking['start_date'], booking['end_date'])}",
+        f"Hyresdagar/prisdagar: {rental_day_count(booking['start_date'], booking['end_date'])}",
         f"Barnbollar: {booking['child_count']}",
         f"Vuxenbollar: {booking['adult_count']}",
         f"Leverans: {'Ja' if booking['deliver'] else 'Nej'}",
@@ -956,6 +1070,26 @@ def generate_agreement_pdf(booking: sqlite3.Row, case_path: Path) -> str:
         "En ansvarig vuxen ska finnas på plats under användning.",
     ]:
         y = draw_wrapped(c, f"• {item}", 50, y)
+
+    addon_terms = selected_addon_terms(booking)
+    if addon_terms:
+        y -= 10
+        if y < 90:
+            c.showPage()
+            y = 800
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, y, "Villkor för valda tillval")
+        y -= 18
+        c.setFont("Helvetica", 10)
+
+        for term in addon_terms:
+            if y < 90:
+                c.showPage()
+                y = 800
+                c.setFont("Helvetica", 10)
+            y = draw_wrapped(c, f"• {term}", 50, y)
+            y -= 5
+
     c.setFont("Helvetica", 8)
     c.drawString(40, 40, "Genererat av bokningssystemet. Kontrollera SHA-256-hash i adminvyn.")
     c.save()
@@ -1020,6 +1154,7 @@ def generate_damage_invoice_pdf(booking: sqlite3.Row, case_path: Path, descripti
         f"Betalas senast: {due_date.isoformat()} (14 dagar från utfärdande)",
         f"Bokning: #{booking['id']}",
         f"Hyrestagare: {booking['name']}",
+        *customer_extra_lines(booking),
         f"E-post: {booking['email']}",
         f"Telefon: {booking['phone'] or '-'}",
         f"Period: {format_period(booking['start_date'], booking['end_date'])}",
@@ -1085,6 +1220,12 @@ def booking_form():
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
+        customer_type = request.form.get("customer_type", "private").strip()
+        if customer_type not in {"private", "company"}:
+            customer_type = "private"
+        company_name = request.form.get("company_name", "").strip()
+        org_number = request.form.get("org_number", "").strip()
+        invoice_reference = request.form.get("invoice_reference", "").strip()
         location = request.form.get("location", "").strip()
         message = request.form.get("message", "").strip()
         coupon_code = normalize_coupon_code(request.form.get("coupon_code", ""))
@@ -1115,6 +1256,8 @@ def booking_form():
 
         if not requested_date or not name or not email or not phone:
             return render_template("booking_form.html", error="Fyll i datum, namn, e-post och telefon. Telefon används som meddelande/OCR vid betalning.", **template_context)
+        if customer_type == "company" and not company_name:
+            return render_template("booking_form.html", error="Fyll i företagsnamn om bokningen gäller ett företag.", **template_context)
         if child_count <= 0 and adult_count <= 0:
             return render_template("booking_form.html", error="Välj minst en boll.", **template_context)
         if child_count % 2 != 0 or adult_count % 2 != 0:
@@ -1146,16 +1289,17 @@ def booking_form():
                 **template_context,
             )
 
-        subtotal = subtotal_price(child_count, adult_count, deliver, return_delivery, delivery_zone, tournament_kit, car_rental, cargo_bike)
+        rental_days = rental_day_count(start_date, end_date)
+        subtotal = subtotal_price(child_count, adult_count, deliver, return_delivery, delivery_zone, tournament_kit, car_rental, cargo_bike, rental_days)
         discount_amount = discount_amount_for_subtotal(subtotal, discount_percent)
         estimated_price = total_after_discount(subtotal, discount_percent)
         db = get_db()
         cur = db.execute(
             """
-            INSERT INTO bookings (created_at, start_date, end_date, child_count, adult_count, name, email, phone, location, deliver, return_delivery, delivery_zone, tournament_kit, car_rental, cargo_bike, coupon_code, discount_percent, message, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'booked_unpaid')
+            INSERT INTO bookings (created_at, start_date, end_date, child_count, adult_count, name, email, phone, customer_type, company_name, org_number, invoice_reference, location, deliver, return_delivery, delivery_zone, tournament_kit, car_rental, cargo_bike, coupon_code, discount_percent, message, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'booked_unpaid')
             """,
-            (datetime.now().isoformat(timespec="seconds"), start_date, end_date, child_count, adult_count, name, email, phone, location, deliver, return_delivery, delivery_zone, tournament_kit, car_rental, cargo_bike, coupon_code or None, discount_percent, message),
+            (datetime.now().isoformat(timespec="seconds"), start_date, end_date, child_count, adult_count, name, email, phone, customer_type, company_name or None, org_number or None, invoice_reference or None, location, deliver, return_delivery, delivery_zone, tournament_kit, car_rental, cargo_bike, coupon_code or None, discount_percent, message),
         )
         booking_id = cur.lastrowid
         db.commit()
@@ -1165,6 +1309,11 @@ def booking_form():
         due_date = business_days_before(start_date, 3)
         invoice_file = case["payment_invoice_file"] if case and case["payment_invoice_file"] else None
         verify_url = url_for("public_verify", token=case["verification_token"], _external=True) if case and case["verification_token"] else ""
+        customer_email_lines = f"Bokar som: {'Företag' if customer_type == 'company' else 'Privatperson'}\n"
+        if customer_type == "company":
+            customer_email_lines += f"Företag: {company_name}\n"
+            customer_email_lines += f"Organisationsnummer: {org_number or '-'}\n"
+            customer_email_lines += f"Fakturareferens/PO: {invoice_reference or '-'}\n"
 
         send_email(
             email,
@@ -1172,6 +1321,7 @@ def booking_form():
             (
                 f"Hej {name}!\n\n"
                 f"Din bokning för {period_text} är reserverad.\n\n"
+                f"Hyresdagar/prisdagar: {rental_days}\n"
                 f"Barnbollar: {child_count}\n"
                 f"Vuxenbollar: {adult_count}\n"
                 f"Pris före rabatt: {subtotal} kr\n"
@@ -1198,6 +1348,7 @@ def booking_form():
             (
                 f"Ny direktbokning har kommit in.\n\n"
                 f"Period: {period_text}\n"
+                f"Hyresdagar/prisdagar: {rental_days}\n"
                 f"Barnbollar: {child_count}\n"
                 f"Vuxenbollar: {adult_count}\n"
                 f"Pris före rabatt: {subtotal} kr\n"
