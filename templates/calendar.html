@@ -9,44 +9,83 @@
     body{font-family:Arial,sans-serif;max-width:1120px;margin:0 auto;padding:20px;background:#f7f7fb;color:#111827}
     .logo{display:block;width:min(330px,100%);margin:0 auto 18px}
     .top{background:white;border-radius:18px;padding:20px;box-shadow:0 8px 28px rgba(0,0,0,.08);margin-bottom:18px}
-    .month{margin:22px 0;background:white;border-radius:16px;padding:14px;box-shadow:0 6px 18px rgba(0,0,0,.05)}
+    .button{display:inline-block;padding:10px 14px;border-radius:999px;background:#111827;color:white;text-decoration:none}
+    .legend span{display:inline-block;margin:4px;padding:6px 10px;border-radius:999px;border:1px solid #cbd5e1}
+    details.month{margin:14px 0;background:white;border-radius:16px;box-shadow:0 6px 18px rgba(0,0,0,.05);overflow:hidden}
+    details.month summary{list-style:none;cursor:pointer;padding:16px 18px;font-size:20px;font-weight:800;display:flex;justify-content:space-between;align-items:center;background:white}
+    details.month summary::-webkit-details-marker{display:none}
+    details.month summary::after{content:"Öppna";font-size:13px;font-weight:800;background:#111827;color:white;border-radius:999px;padding:6px 10px}
+    details.month[open] summary{border-bottom:1px solid #e2e8f0}
+    details.month[open] summary::after{content:"Stäng"}
+    .month-inner{padding:14px;overflow-x:auto}
     table{width:100%;border-collapse:collapse;background:white}
     th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;height:76px}
     th{background:#111827;color:white;height:auto}
-    .date{font-weight:800;font-size:17px}.muted{color:#64748b;font-size:13px}.legend span{display:inline-block;margin:4px;padding:6px 10px;border-radius:999px;border:1px solid #cbd5e1}a{font-weight:700;color:#111827}.button{display:inline-block;padding:10px 14px;border-radius:999px;background:#111827;color:white;text-decoration:none}
-    @media(max-width:650px){body{padding:10px}.month{overflow-x:auto}table{min-width:760px}th,td{font-size:12px;padding:5px}}
+    .date{font-weight:800;font-size:17px}
+    .muted{color:#64748b;font-size:13px}
+    .year-title{margin:28px 0 8px;font-size:24px}
+    @media(max-width:650px){
+      body{padding:10px}
+      table{min-width:760px}
+      th,td{font-size:12px;padding:5px}
+      details.month summary{font-size:17px}
+    }
   </style>
 </head>
 <body>
   <img class="logo" src="{{ url_for('static', filename='logo.png') }}" alt="Offroad Bumpis">
+
   <div class="top">
-    <h1>Tillgänglighet 6 månader framåt</h1>
+    <h1>Tillgänglighet {{ calendar_start_year }}–{{ calendar_end_year }}</h1>
     <p>Barnbollar: 12 st finns nu. Vuxenbollar: 12 st kan bokas från {{ adult_available_from_sv }}.</p>
-    <p class="legend"><span style="background:#d4edda">Fullt ledigt</span><span style="background:#fff3cd">Delvis ledigt</span><span style="background:#f8d7da">Slut</span></p>
+    <p class="legend">
+      <span style="background:#d4edda">Fullt ledigt</span>
+      <span style="background:#fff3cd">Delvis ledigt</span>
+      <span style="background:#f8d7da">Slut</span>
+    </p>
+    <p>Tryck på en månad för att öppna hela kalendern för den månaden.</p>
     <p><a class="button" href="{{ url_for('booking_form') }}">Till bokningsformuläret</a></p>
   </div>
+
+  {% set ns = namespace(last_year=None) %}
   {% for month in months %}
-  <section class="month">
-    <h2>{{ month.month_name }} {{ month.year }}</h2>
-    <table>
-      <thead><tr>{% for name in weekday_names %}<th>{{ name }}</th>{% endfor %}</tr></thead>
-      <tbody>
-      {% for week in month.weeks %}<tr>{% for day in week %}
-        {% if day is none %}<td></td>{% else %}
-        <td style="background:{{ day.color }}">
-          <span class="date">{{ day.date[-2:] }}</span><br>
-          Barn: {{ day.available.barn }}/{{ day.inventory.barn }}<br>
-          {% if day.adult_active %}
-            Vuxen: {{ day.available.vuxen }}/{{ day.inventory.vuxen }}
-          {% else %}
-            <span class="muted">Vuxen: från 1 sep</span>
-          {% endif %}
-        </td>
-        {% endif %}
-      {% endfor %}</tr>{% endfor %}
-      </tbody>
-    </table>
-  </section>
+    {% if ns.last_year != month.year %}
+      <h2 class="year-title">{{ month.year }}</h2>
+      {% set ns.last_year = month.year %}
+    {% endif %}
+
+    <details class="month" {% if month.year == current_year and month.month_number == current_month %}open{% endif %}>
+      <summary>{{ month.month_name }} {{ month.year }}</summary>
+
+      <div class="month-inner">
+        <table>
+          <thead>
+            <tr>{% for name in weekday_names %}<th>{{ name }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+          {% for week in month.weeks %}
+            <tr>
+              {% for day in week %}
+                {% if day is none %}
+                  <td></td>
+                {% else %}
+                  <td style="background:{{ day.color }}">
+                    <span class="date">{{ day.date[-2:] }}</span><br>
+                    Barn: {{ day.available.barn }}/{{ day.inventory.barn }}<br>
+                    {% if day.adult_active %}
+                      Vuxen: {{ day.available.vuxen }}/{{ day.inventory.vuxen }}
+                    {% else %}
+                      <span class="muted">Vuxen: från 1 sep</span>
+                    {% endif %}
+                  </td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
   {% endfor %}
 </body>
 </html>
