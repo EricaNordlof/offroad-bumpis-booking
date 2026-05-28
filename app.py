@@ -355,6 +355,23 @@ DELIVERY_ZONES = {
 COUPON_CODES = {
     "BLLACA": 10,
     "BLLACA09": 10,
+
+    "YNGVE10": 10,
+    "IGEN-1026": 10,
+    "BEHAR-1026": 10,
+    "ERICA-10": 10,
+    "ERICA10": 10,
+    "ANNIKA-1026": 10,
+    "YNGVE-1026": 10,
+    "EMIL-1026": 10,
+    "ERICA-1026": 10,
+    "BUMPIS-4827": 10,
+    "HJP-1026": 10,
+    "KOMPASS-1026": 10,
+    "VINTERSPEL": 10,
+
+    "BUMPIS-2026": 20,
+    "20BUMPERBALL2026": 20,
 }
 
 # Vem som ska få affiliate-mejl för respektive rabattkod.
