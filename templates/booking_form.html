@@ -362,8 +362,8 @@
 
     <div class="info">
       <strong>Snabbt:</strong> Barnbollar finns nu. Vuxenbollar kan bokas från {{ adult_available_from_sv }}.<br>
-      <strong>Helg:</strong> Väljer du fredag utan slutdatum gäller bokningen fredag kl. 08 till söndag kl. 20.<br>
-      <strong>Betalning:</strong> Betalas senast 3 arbetsdagar före utlämning, annars släpps bokningen.
+      <strong>Helg:</strong> Fredag till söndag räknas som 1 hyresdag/prisdag.<br>
+      <strong>Flerdagar:</strong> Pris på bollar, kombibil och ellådcykel räknas per hyresdag. Betalas senast 3 arbetsdagar före utlämning, annars släpps bokningen.
     </div>
 
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
@@ -379,7 +379,7 @@
           <input type="date" id="end_date" name="end_date" value="{{ form_data.end_date if form_data else '' }}">
         </div>
       </div>
-      <small>Lämna slutdatum tomt för vanlig endagshyra. Fredag utan slutdatum räknas automatiskt som helg: fredag kl. 08 till söndag kl. 20.</small>
+      <small>Lämna slutdatum tomt för vanlig endagshyra. Fredag till söndag räknas som 1 hyresdag/prisdag.</small>
 
       <div class="row">
         <div>
@@ -403,6 +403,32 @@
       <label for="phone">Telefon / meddelande vid betalning</label>
       <input id="phone" name="phone" value="{{ form_data.phone if form_data else '' }}" required>
 
+      <h2 class="section-title">Kundtyp</h2>
+      <div class="row">
+        <div>
+          <label for="customer_type">Bokar som</label>
+          <select id="customer_type" name="customer_type">
+            <option value="private" {% if not form_data or form_data.customer_type != 'company' %}selected{% endif %}>Privatperson</option>
+            <option value="company" {% if form_data and form_data.customer_type == 'company' %}selected{% endif %}>Företag</option>
+          </select>
+        </div>
+        <div>
+          <label for="company_name">Företagsnamn</label>
+          <input id="company_name" name="company_name" value="{{ form_data.company_name if form_data else '' }}" placeholder="Fyll i om det gäller företag">
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="org_number">Organisationsnummer</label>
+          <input id="org_number" name="org_number" value="{{ form_data.org_number if form_data else '' }}" placeholder="Valfritt">
+        </div>
+        <div>
+          <label for="invoice_reference">Fakturareferens / PO</label>
+          <input id="invoice_reference" name="invoice_reference" value="{{ form_data.invoice_reference if form_data else '' }}" placeholder="Valfritt">
+        </div>
+      </div>
+      <small>För företag hamnar företagsnamn, organisationsnummer och referens på faktura och hyresavtal.</small>
+
       <label for="location">Plats / leveransadress</label>
       <input id="location" name="location" value="{{ form_data.location if form_data else '' }}">
 
@@ -418,16 +444,16 @@
       <label class="checkbox">
         <input type="checkbox" id="car_rental" name="car_rental" {% if form_data and form_data.car_rental %}checked{% endif %}>
         <span>
-          Kombibil +500 kr
-          <span class="hint">För större paket om ni vill hämta själv men saknar rätt transport.</span>
+          Kombibil +500 kr / hyresdag
+          <span class="hint">Fria mil. Enklare äldre kombibil. Vårdslöshet/skador debiteras.</span>
         </span>
       </label>
 
       <label class="checkbox">
         <input type="checkbox" id="cargo_bike" name="cargo_bike" {% if form_data and form_data.cargo_bike %}checked{% endif %}>
         <span>
-          Ellådcykel +350 kr
-          <span class="hint">För upp till 4 bollar inom Malmö.</span>
+          Ellådcykel +350 kr / hyresdag
+          <span class="hint">För upp till 4 bollar inom Malmö. Pris per hyresdag. Batteriladdare ingår.</span>
         </span>
       </label>
 
@@ -507,37 +533,34 @@
             <div class="mini-card">
               <h3>Turneringskit</h3>
               <span class="price">1 000 kr</span>
-              <p>För kalas, skola, fritids och förening som vill ha mer struktur.</p>
-              <p><strong>Återlämnas vid retur:</strong></p>
-              <ul class="clean">
-                <li>lagvästar</li>
-                <li>knäskydd</li>
-                <li>koner</li>
-                <li>markörer</li>
-                <li>skumfotboll</li>
-              </ul>
-              <p><strong>Får behållas som souvenirer:</strong></p>
-              <ul class="clean">
-                <li>diplom</li>
-                <li>poängmallar</li>
-                <li>pokal</li>
-                <li>visselpipa</li>
-                <li>reflexer</li>
-              </ul>
+              <p>För lekar, matcher och prisutdelning.</p>
+              <details>
+                <summary>Vad ingår?</summary>
+                <p><strong>Ska återlämnas:</strong> lagvästar, knäskydd, koner, markörer och skumfotboll.</p>
+                <p><strong>Ni får behålla:</strong> diplom, poängmallar, pokal, visselpipa och reflexer.</p>
+              </details>
             </div>
 
             <div class="mini-card">
               <h3>Kombibil</h3>
               <span class="price">500 kr</span>
-              <p>För större paket om ni vill hämta själv men saknar rätt transport.</p>
-              <small>Passar bäst för 10–12 bollar. Bokas tillsammans med bumperballs.</small>
+              <p>För större paket om ni vill hämta själv.</p>
+              <details>
+                <summary>Villkor</summary>
+                <p>Fria mil ingår. Bilen är en enklare äldre kombibil med värde cirka 15 000 kr.</p>
+                <p>Bilen har trafikförsäkring. Normalt slitage ingår. Vårdslöshet, skador, böter, avgifter och saknad utrustning debiteras.</p>
+              </details>
             </div>
 
             <div class="mini-card">
               <h3>Ellådcykel</h3>
               <span class="price">350 kr</span>
-              <p>För mindre paket inom Malmö.</p>
-              <small>Det får plats med upp till 4 bollar i ellådcykeln. Smidig lösning om ni saknar bil.</small>
+              <p>För upp till 4 bollar inom Malmö. Pris per hyresdag.</p>
+              <details>
+                <summary>Villkor</summary>
+                <p>Batteriladdare ingår. Ellådcykeln är värd cirka 15 000 kr.</p>
+                <p>Normalt slitage ingår. Vårdslöshet, skador, stöld/förlust, saknat batteri eller saknad laddare debiteras.</p>
+              </details>
             </div>
           </div>
         </div>
@@ -583,6 +606,8 @@
   const zoneInput = document.getElementById("delivery_zone");
   const couponInput = document.getElementById("coupon_code");
   const couponStatus = document.getElementById("couponStatus");
+  const customerTypeInput = document.getElementById("customer_type");
+  const companyNameInput = document.getElementById("company_name");
 
   function normalizeCoupon(code) {
     return (code || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -604,15 +629,49 @@
     return date.toISOString().slice(0, 10);
   }
 
+  function effectiveEndDate() {
+    if (!dateInput.value) return "";
+    if (endDateInput.value) return endDateInput.value;
+    if (isFriday(dateInput.value)) return addDays(dateInput.value, 2);
+    return dateInput.value;
+  }
+
+  function rentalDayCount() {
+    if (!dateInput.value) return 1;
+
+    const start = new Date(`${dateInput.value}T12:00:00`);
+    const end = new Date(`${effectiveEndDate()}T12:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return 1;
+    }
+
+    let units = 0;
+    const current = new Date(start);
+    while (current <= end) {
+      const day = current.getDay(); // 5 = Friday
+      const plusTwo = new Date(current);
+      plusTwo.setDate(plusTwo.getDate() + 2);
+      if (day === 5 && plusTwo <= end) {
+        units += 1;
+        current.setDate(current.getDate() + 3);
+      } else {
+        units += 1;
+        current.setDate(current.getDate() + 1);
+      }
+    }
+    return Math.max(units, 1);
+  }
+
   function selectedPeriodText() {
     if (!dateInput.value) return "";
+    const days = rentalDayCount();
     if (endDateInput.value) {
-      return `Period: ${dateInput.value} till ${endDateInput.value}`;
+      return `Period: ${dateInput.value} till ${endDateInput.value}. Hyresdagar/prisdagar: ${days}`;
     }
     if (isFriday(dateInput.value)) {
-      return `Period: ${dateInput.value} till ${addDays(dateInput.value, 2)} (helg)`;
+      return `Period: ${dateInput.value} till ${addDays(dateInput.value, 2)} (helg). Hyresdagar/prisdagar: ${days}`;
     }
-    return `Period: ${dateInput.value}`;
+    return `Period: ${dateInput.value}. Hyresdagar/prisdagar: ${days}`;
   }
 
   function syncEndDateMin() {
@@ -623,8 +682,20 @@
     }
   }
 
+  function updateCompanyHelp() {
+    if (!customerTypeInput || !companyNameInput) return;
+    if (customerTypeInput.value === "company") {
+      companyNameInput.required = true;
+      companyNameInput.placeholder = "Företagsnamn krävs";
+    } else {
+      companyNameInput.required = false;
+      companyNameInput.placeholder = "Fyll i om det gäller företag";
+    }
+  }
+
   function updateFormHelp() {
     syncEndDateMin();
+    updateCompanyHelp();
 
     if (dateInput.value && dateInput.value < adultStart) {
       adultInput.value = 0;
@@ -639,11 +710,13 @@
     const adult = parseInt(adultInput.value || "0", 10);
     const totalBalls = child + adult;
 
-    const baseTotal = getLadderPrice(childPrices, child) + getLadderPrice(adultPrices, adult);
+    const days = rentalDayCount();
+    const baseUnitTotal = getLadderPrice(childPrices, child) + getLadderPrice(adultPrices, adult);
+    const baseTotal = baseUnitTotal * days;
     const addonTotal =
       (tournamentInput.checked ? addonPrices.tournament_kit : 0) +
-      (carInput.checked ? addonPrices.car_rental : 0) +
-      (cargoInput.checked ? addonPrices.cargo_bike : 0);
+      (carInput.checked ? addonPrices.car_rental * days : 0) +
+      (cargoInput.checked ? addonPrices.cargo_bike * days : 0);
 
     const zone = deliveryZones[zoneInput.value] || deliveryZones.pickup;
     const ways = (deliverInput.checked ? 1 : 0) + (returnInput.checked ? 1 : 0);
@@ -673,9 +746,9 @@
     pricePreview.classList.remove("warning");
 
     if (discountPercent > 0) {
-      pricePreview.textContent = `Pris: ${total} kr efter ${discountPercent}% rabatt (ordinarie ${subtotal} kr, rabatt ${discountAmount} kr). ${period}`;
+      pricePreview.textContent = `Pris: ${total} kr efter ${discountPercent}% rabatt (ordinarie ${subtotal} kr, rabatt ${discountAmount} kr). Bollar: ${baseUnitTotal} kr × ${days} hyresdagar. ${period}`;
     } else {
-      pricePreview.textContent = `Pris: ${total} kr (bollar ${baseTotal} kr + tillval ${addonTotal} kr + leverans ${deliveryTotal} kr). ${period}`;
+      pricePreview.textContent = `Pris: ${total} kr (bollar ${baseUnitTotal} kr × ${days} hyresdagar = ${baseTotal} kr + tillval ${addonTotal} kr + leverans ${deliveryTotal} kr). ${period}`;
     }
   }
 
@@ -690,6 +763,7 @@
   returnInput.addEventListener("change", updateFormHelp);
   zoneInput.addEventListener("change", updateFormHelp);
   couponInput.addEventListener("input", updateFormHelp);
+  if (customerTypeInput) customerTypeInput.addEventListener("change", updateFormHelp);
 
   updateFormHelp();
 </script>
