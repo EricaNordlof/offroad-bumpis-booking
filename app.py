@@ -213,13 +213,25 @@ def format_period(start_date_str: str, end_date_str: str) -> str:
     return f"{start_date_str} kl. 08 till {end_date_str} kl. 20"
 
 
-def booking_period(start_date_str: str) -> tuple[str, str]:
-    """Friday bookings automatically cover Friday 08:00 to Sunday 20:00."""
+def booking_period(start_date_str: str, end_date_str: str | None = None) -> tuple[str, str]:
+    """Return booking period.
+
+    If end_date_str is provided, the customer has chosen a custom multi-day period.
+    If it is left empty, Friday still automatically covers Friday 08:00 to Sunday 20:00.
+    """
     start = parse_date(start_date_str)
+
+    if end_date_str:
+        end = parse_date(end_date_str)
+        if end < start:
+            raise ValueError("end_date_before_start_date")
+        return start.isoformat(), end.isoformat()
+
     if start.weekday() == 4:  # Friday
         end = start + timedelta(days=2)
     else:
         end = start
+
     return start.isoformat(), end.isoformat()
 
 
@@ -1069,6 +1081,7 @@ def booking_form():
 
     if request.method == "POST":
         requested_date = request.form.get("date", "").strip()
+        requested_end_date = request.form.get("end_date", "").strip()
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
@@ -1114,8 +1127,14 @@ def booking_form():
             return render_template("booking_form.html", error="Välj leveranszon när du vill ha leverans eller återleverans.", **template_context)
         if not (deliver or return_delivery):
             delivery_zone = "pickup"
+        if cargo_bike and (child_count + adult_count) > 4:
+            return render_template("booking_form.html", error="Ellådcykel kan bara bokas för upp till 4 bollar. Välj färre bollar, ta bort ellådcykel eller välj kombibil/leverans.", **template_context)
 
-        start_date, end_date = booking_period(requested_date)
+        try:
+            start_date, end_date = booking_period(requested_date, requested_end_date)
+        except ValueError:
+            return render_template("booking_form.html", error="Kontrollera startdatum och slutdatum. Slutdatum kan inte vara före startdatum.", **template_context)
+
         remaining = remaining_for_period(start_date, end_date)
         if adult_count > 0 and parse_date(start_date) < ADULT_AVAILABLE_FROM:
             return render_template("booking_form.html", error="Vuxenbollar kan bokas från och med 1 september 2026.", **template_context)
