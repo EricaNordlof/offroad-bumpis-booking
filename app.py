@@ -389,11 +389,13 @@ AFFILIATE_COUPONS = {
     "BLLACA": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BLLACA09": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BEHAR-1026": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
-    "YNGVE10": {"name": "Yngve", "email": "yngveaniedeh@gmail.com"},
+
+    "YNGVE10": {"name": "Yngve Aniedeh", "email": "yngveaniedeh@gmail.com"},
     "ANNIKA-1026": {"name": "Annika Nordlöf", "email": "annikanordlof@outlook.com"},
     "EMIL-1026": {"name": "Emil Aniedeh", "email": "emil.aniedeh2009@gmail.com"},
     "HJP-1026": {"name": "Hitta Jippo", "email": "Hittajippo@outlook.com"},
-    "KOMPASS-1026": {"name": "Kompass", "email": "oliverlon20020@gmail.com"},
+    "KOMPASS-1026": {"name": "Oliver", "email": "oliverlon20020@gmail.com"},
+    "BUMPIS-4827": {"name": "Katusergo7", "email": "katusergo7@gmail.com"},
 }
 
 
