@@ -712,7 +712,15 @@ def generate_hash_register_pdf(booking, case_path: Path, hashes: dict[str, str],
         ("Ifylld återlämningskontroll", "return_control"),
         ("Skadefaktura", "damage_invoice"),
     ]
-    for label, key in labels:
+
+    photo_labels = []
+    for key in sorted(hashes.keys()):
+        if key.startswith("foto_utlamning_"):
+            photo_labels.append((f"Foto utlämning: {key.replace('foto_utlamning_', '')}", key))
+        elif key.startswith("foto_aterlamning_"):
+            photo_labels.append((f"Foto återlämning: {key.replace('foto_aterlamning_', '')}", key))
+
+    for label, key in labels + photo_labels:
         value = hashes.get(key)
         if not value:
             continue
@@ -721,8 +729,7 @@ def generate_hash_register_pdf(booking, case_path: Path, hashes: dict[str, str],
             y = 800
             c.setFont("Helvetica", 10)
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(40, y, label)
-        y -= 14
+        y = draw_wrapped(c, label, 40, y, max_chars=82, step=12)
         c.setFont("Courier", 8)
         c.drawString(40, y, value[:64])
         y -= 18
@@ -858,6 +865,7 @@ def generate_handover_control_pdf(
     pump_included: bool,
     rules_reviewed: bool,
     notes: str,
+    photo_records: list[dict[str, str]] | None = None,
 ) -> str:
     """Create filled handover control PDF from admin checkboxes."""
     path = case_path / "utlamningskontroll_ifylld.pdf"
@@ -902,9 +910,32 @@ def generate_handover_control_pdf(
     c.drawString(40, y, "Anteckningar")
     y -= 18
     c.setFont("Helvetica", 10)
-    draw_wrapped(c, notes or "Inga anteckningar.", 40, y)
+    y = draw_wrapped(c, notes or "Inga anteckningar.", 40, y)
+
+    photos = photo_records or []
+    if photos:
+        y -= 10
+        if y < 120:
+            c.showPage()
+            y = 800
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, y, "Bifogade foton")
+        y -= 18
+        c.setFont("Helvetica", 9)
+        for photo in photos:
+            if y < 90:
+                c.showPage()
+                y = 800
+                c.setFont("Helvetica", 9)
+            y = draw_wrapped(c, f"Foto: {photo['filename']}", 40, y, max_chars=86, step=12)
+            c.setFont("Courier", 7)
+            c.drawString(40, y, f"SHA-256: {photo['hash'][:64]}")
+            y -= 15
+            c.setFont("Helvetica", 9)
+
     c.save()
     return str(path)
+
 
 
 def generate_return_control_pdf(
@@ -917,6 +948,7 @@ def generate_return_control_pdf(
     cleaning_needed: bool,
     damage_invoice_needed: bool,
     notes: str,
+    photo_records: list[dict[str, str]] | None = None,
 ) -> str:
     """Create filled return control PDF from admin checkboxes."""
     path = case_path / "aterlamningskontroll_ifylld.pdf"
@@ -961,10 +993,32 @@ def generate_return_control_pdf(
     c.drawString(40, y, "Anteckningar")
     y -= 18
     c.setFont("Helvetica", 10)
-    draw_wrapped(c, notes or "Inga anteckningar.", 40, y)
+    y = draw_wrapped(c, notes or "Inga anteckningar.", 40, y)
+
+    photos = photo_records or []
+    if photos:
+        y -= 10
+        if y < 120:
+            c.showPage()
+            y = 800
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, y, "Bifogade foton")
+        y -= 18
+        c.setFont("Helvetica", 9)
+        for photo in photos:
+            if y < 90:
+                c.showPage()
+                y = 800
+                c.setFont("Helvetica", 9)
+            y = draw_wrapped(c, f"Foto: {photo['filename']}", 40, y, max_chars=86, step=12)
+            c.setFont("Courier", 7)
+            c.drawString(40, y, f"SHA-256: {photo['hash'][:64]}")
+            y -= 15
+            c.setFont("Helvetica", 9)
 
     c.save()
     return str(path)
+
 
 
 def build_case_hashes(current_case, extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -1610,14 +1664,26 @@ def admin_case_view(booking_id: int):
     case = db.execute("SELECT * FROM safe_cases WHERE booking_id = ?", (booking_id,)).fetchone()
     if not booking or not case:
         return redirect(url_for("admin_bookings"))
-    return render_template("admin_case.html", booking=dict(booking), case=dict(case))
+    return render_template(
+        "admin_case.html",
+        booking=dict(booking),
+        case=dict(case),
+        handover_photos=photo_records_for_case(booking_id, "utlamning"),
+        return_photos=photo_records_for_case(booking_id, "aterlamning"),
+    )
 
 
 @app.route("/cases/<int:booking_id>/<path:filename>")
 @admin_required
 def serve_case_file(booking_id: int, filename: str):
     safe_filename = file_basename(filename)
-    return send_from_directory(ensure_case_directory(booking_id), safe_filename, as_attachment=True)
+    ext = Path(safe_filename).suffix.lower()
+    image_extensions = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+    return send_from_directory(
+        ensure_case_directory(booking_id),
+        safe_filename,
+        as_attachment=ext not in image_extensions,
+    )
 
 
 
@@ -1663,7 +1729,7 @@ def admin_damage_invoice(booking_id: int):
     hash_register = generate_hash_register_pdf(
         booking,
         case_path,
-        build_case_hashes(current_case, {"damage_invoice": invoice_hash}),
+        build_case_hashes(current_case, {"damage_invoice": invoice_hash, **photo_hashes_for_case(booking_id)}),
         verification_token,
     )
     hash_register_hash = hash_file(hash_register)
@@ -1700,6 +1766,8 @@ def admin_handover_control(booking_id: int):
     notes = request.form.get("handover_notes", "").strip()
 
     case_path = ensure_case_directory(booking_id)
+    save_uploaded_photos(booking_id, "handover_photos", "utlamning")
+    handover_photos = photo_records_for_case(booking_id, "utlamning")
     handover_control = generate_handover_control_pdf(
         booking,
         case_path,
@@ -1710,6 +1778,7 @@ def admin_handover_control(booking_id: int):
         pump_included,
         rules_reviewed,
         notes,
+        handover_photos,
     )
     handover_control_hash = hash_file(handover_control)
 
@@ -1717,7 +1786,7 @@ def admin_handover_control(booking_id: int):
     hash_register = generate_hash_register_pdf(
         booking,
         case_path,
-        build_case_hashes(current_case, {"handover_control": handover_control_hash}),
+        build_case_hashes(current_case, {"handover_control": handover_control_hash, **photo_hashes_for_case(booking_id)}),
         verification_token,
     )
     hash_register_hash = hash_file(hash_register)
@@ -1761,6 +1830,8 @@ def admin_return_control(booking_id: int):
     notes = request.form.get("return_notes", "").strip()
 
     case_path = ensure_case_directory(booking_id)
+    save_uploaded_photos(booking_id, "return_photos", "aterlamning")
+    return_photos = photo_records_for_case(booking_id, "aterlamning")
     return_control = generate_return_control_pdf(
         booking,
         case_path,
@@ -1771,6 +1842,7 @@ def admin_return_control(booking_id: int):
         cleaning_needed,
         damage_invoice_needed,
         notes,
+        return_photos,
     )
     return_control_hash = hash_file(return_control)
 
@@ -1778,7 +1850,7 @@ def admin_return_control(booking_id: int):
     hash_register = generate_hash_register_pdf(
         booking,
         case_path,
-        build_case_hashes(current_case, {"return_control": return_control_hash}),
+        build_case_hashes(current_case, {"return_control": return_control_hash, **photo_hashes_for_case(booking_id)}),
         verification_token,
     )
     hash_register_hash = hash_file(hash_register)
