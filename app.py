@@ -62,6 +62,16 @@ TOTAL_BALLS = TOTAL_CHILD_BALLS + TOTAL_ADULT_BALLS
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "change_me")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "kontakt@offroadbumpis.se")
 
+SELLER_COMPANY = os.getenv("SELLER_COMPANY", "Nordlöf Nordic")
+SELLER_BRAND = os.getenv("SELLER_BRAND", "Offroad Bumpis")
+SELLER_ORG_NUMBER = os.getenv("SELLER_ORG_NUMBER", "8612253966")
+SELLER_VAT_NUMBER = os.getenv("SELLER_VAT_NUMBER", "SE861225396601")
+SELLER_ADDRESS = os.getenv("SELLER_ADDRESS", "Lövviksgatan 10, 213 74 Malmö")
+SELLER_PHONE = os.getenv("SELLER_PHONE", "0793442520")
+SELLER_EMAIL = os.getenv("SELLER_EMAIL", "kontakt@offroadbumpis.se")
+SELLER_WEBSITE = os.getenv("SELLER_WEBSITE", "offroadbumpis.se")
+SELLER_TAX_NOTE = os.getenv("SELLER_TAX_NOTE", "Godkänd för F-skatt")
+
 PAYMENT_STRIPE_URL = os.getenv("PAYMENT_STRIPE_URL", "https://book.stripe.com/28E28tfsO6v888tbVw6oo0a")
 PAYMENT_SWISH = os.getenv("PAYMENT_SWISH", "123-054 60 51")
 PAYMENT_BANK_NAME = os.getenv("PAYMENT_BANK_NAME", "Svea Bank AB")
@@ -378,6 +388,7 @@ COUPON_CODES = {
 AFFILIATE_COUPONS = {
     "BLLACA": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BLLACA09": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
+    "BEHAR-1026": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
 }
 
 
@@ -429,6 +440,34 @@ def customer_extra_lines(booking) -> list[str]:
         lines.append(f"Fakturareferens/PO: {invoice_reference}")
 
     return lines
+
+
+def seller_invoice_lines() -> list[str]:
+    """Return seller/uthyrare lines for invoices and agreements."""
+    lines = [
+        "Säljare / uthyrare",
+        SELLER_COMPANY,
+        f"Varumärke: {SELLER_BRAND}",
+        f"Organisationsnummer: {SELLER_ORG_NUMBER}",
+        f"Momsregistreringsnummer: {SELLER_VAT_NUMBER}",
+        f"Adress / utlämningsadress: {SELLER_ADDRESS}",
+        f"E-post: {SELLER_EMAIL}",
+        f"Telefon: {SELLER_PHONE}",
+        f"Webb: {SELLER_WEBSITE}",
+    ]
+    if SELLER_TAX_NOTE:
+        lines.append(SELLER_TAX_NOTE)
+    return lines
+
+
+def vat_breakdown_from_total(total_including_vat: int, vat_rate: int = 25) -> tuple[int, int, int]:
+    """Return ex VAT, VAT amount and total, assuming prices include VAT."""
+    total = int(total_including_vat or 0)
+    if total <= 0 or vat_rate <= 0:
+        return total, 0, total
+    ex_vat = round(total / (1 + vat_rate / 100))
+    vat = total - ex_vat
+    return ex_vat, vat, total
 
 
 def affiliate_for_coupon(code: str | None) -> dict[str, str] | None:
@@ -691,95 +730,85 @@ def hash_file(path: Path | str) -> str:
     return h.hexdigest()
 
 
-def generate_verification_token() -> str:
-    return secrets.token_urlsafe(18)
 
-    PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+ALLOWED_PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
 
 
-def clean_filename_part(value: str) -> str:
-    """Make a simple safe filename part."""
-    value = file_basename(value or "")
-    stem = Path(value).stem
-    cleaned = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in stem)
-    return cleaned.strip("._") or "foto"
+def clean_upload_filename(filename: str) -> str:
+    """Return a safe file name for uploaded photos."""
+    base = file_basename(filename).strip() or "foto"
+    stem = Path(base).stem
+    ext = Path(base).suffix.lower()
+    safe_stem = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in stem).strip("._-")
+    safe_stem = safe_stem or "foto"
+    return f"{safe_stem[:60]}{ext}"
 
 
-def save_uploaded_photos(booking_id: int, field_name: str, category: str) -> list[dict[str, str]]:
-    """Save uploaded case photos and return filename/hash records.
-
-    category should be:
-    - utlamning
-    - aterlamning
-    """
-    case_path = ensure_case_directory(booking_id)
+def save_uploaded_photos(booking_id: int, field_name: str, phase: str) -> list[dict[str, str]]:
+    """Save uploaded photos for handover/return control and return filename + hash."""
     saved: list[dict[str, str]] = []
+    files = request.files.getlist(field_name)
+    if not files:
+        return saved
 
-    for upload in request.files.getlist(field_name):
-        if not upload or not upload.filename:
+    case_path = ensure_case_directory(booking_id)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for index, uploaded in enumerate(files, start=1):
+        original_name = getattr(uploaded, "filename", "") or ""
+        if not original_name:
             continue
 
-        original_name = file_basename(upload.filename)
-        ext = Path(original_name).suffix.lower()
-
-        if ext not in PHOTO_EXTENSIONS:
+        safe_name = clean_upload_filename(original_name)
+        ext = Path(safe_name).suffix.lower()
+        if ext not in ALLOWED_PHOTO_EXTENSIONS:
             continue
 
-        safe_part = clean_filename_part(original_name)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"foto_{category}_{timestamp}_{secrets.token_hex(4)}_{safe_part}{ext}"
-        target = case_path / filename
-
-        upload.save(target)
-
-        saved.append(
-            {
-                "filename": filename,
-                "hash": hash_file(target),
-            }
-        )
+        target = case_path / f"{phase}_foto_{stamp}_{index}_{safe_name}"
+        uploaded.save(target)
+        saved.append({"filename": target.name, "hash": hash_file(target), "phase": phase})
 
     return saved
 
 
-def photo_records_for_case(booking_id: int, category: str) -> list[dict[str, str]]:
-    """Return saved photo records for one case/category."""
+def photo_records_for_case(booking_id: int, phase: str | None = None) -> list[dict[str, str]]:
+    """List saved photo evidence for a case."""
     case_path = ensure_case_directory(booking_id)
-    prefix = f"foto_{category}_"
-    photos: list[dict[str, str]] = []
+    phases = [phase] if phase else ["utlamning", "aterlamning"]
+    records: list[dict[str, str]] = []
 
-    if not case_path.exists():
-        return photos
-
-    for path in sorted(case_path.iterdir(), key=lambda p: p.name):
+    for path in sorted(case_path.iterdir()):
         if not path.is_file():
             continue
-        if not path.name.startswith(prefix):
-            continue
-        if path.suffix.lower() not in PHOTO_EXTENSIONS:
+
+        matched_phase = None
+        for candidate in phases:
+            if path.name.startswith(f"{candidate}_foto_"):
+                matched_phase = candidate
+                break
+
+        if not matched_phase:
             continue
 
-        photos.append(
-            {
-                "filename": path.name,
-                "hash": hash_file(path),
-            }
-        )
+        records.append({
+            "filename": path.name,
+            "hash": hash_file(path),
+            "phase": matched_phase,
+        })
 
-    return photos
+    return records
 
 
 def photo_hashes_for_case(booking_id: int) -> dict[str, str]:
-    """Return photo hashes in the same format as hash register expects."""
+    """Return photo hashes in the same format as document hashes."""
     hashes: dict[str, str] = {}
-
-    for photo in photo_records_for_case(booking_id, "utlamning"):
-        hashes[f"foto_utlamning_{photo['filename']}"] = photo["hash"]
-
-    for photo in photo_records_for_case(booking_id, "aterlamning"):
-        hashes[f"foto_aterlamning_{photo['filename']}"] = photo["hash"]
-
+    for record in photo_records_for_case(booking_id):
+        hashes[f"foto_{record['phase']}_{record['filename']}"] = record["hash"]
     return hashes
+
+
+def generate_verification_token() -> str:
+    return secrets.token_urlsafe(18)
 
 
 def generate_hash_register_pdf(booking, case_path: Path, hashes: dict[str, str], verification_token: str) -> str:
@@ -875,6 +904,7 @@ def generate_payment_invoice_pdf(booking: sqlite3.Row, case_path: Path) -> str:
     discount_amount = booking_discount_amount(booking)
     coupon_code = booking_value(booking, "coupon_code") or "-"
     total = total_price_for_booking(booking)
+    ex_vat, vat_amount, total_including_vat = vat_breakdown_from_total(total, 25)
     due_date = business_days_before(booking["start_date"], 3)
     zone = DELIVERY_ZONES.get(booking["delivery_zone"] or "pickup", DELIVERY_ZONES["pickup"])
     ways = (1 if int(booking["deliver"] or 0) else 0) + (1 if int(booking["return_delivery"] or 0) else 0)
@@ -887,8 +917,13 @@ def generate_payment_invoice_pdf(booking: sqlite3.Row, case_path: Path) -> str:
     c.setFont("Helvetica", 10)
 
     lines = [
+        *seller_invoice_lines(),
+        "",
         f"Fakturanummer: OB-{int(booking['id']):04d}",
+        f"Fakturadatum: {date.today().isoformat()}",
         f"Bokning: #{booking['id']}",
+        "",
+        "Köpare / kund",
         f"Kund: {booking['name']}",
         *customer_extra_lines(booking),
         f"E-post: {booking['email']}",
@@ -925,7 +960,9 @@ def generate_payment_invoice_pdf(booking: sqlite3.Row, case_path: Path) -> str:
         lines.append(f"Rabattkod: {coupon_code} ({discount_percent}% rabatt)")
         lines.append(f"Rabatt: -{sek(discount_amount)}")
     lines += [
-        f"Belopp att betala: {sek(total)}",
+        f"Belopp exkl. moms: {sek(ex_vat)}",
+        f"Moms 25 %: {sek(vat_amount)}",
+        f"Belopp att betala inkl. moms: {sek(total_including_vat)}",
         "",
         "Betalningsalternativ",
         f"Swish: {PAYMENT_SWISH}",
@@ -947,7 +984,7 @@ def generate_payment_invoice_pdf(booking: sqlite3.Row, case_path: Path) -> str:
             c.showPage()
             y = 800
             c.setFont("Helvetica", 10)
-        if line in {"Specifikation", "Betalningsalternativ", "Banköverföring"}:
+        if line in {"Säljare / uthyrare", "Köpare / kund", "Specifikation", "Betalningsalternativ", "Banköverföring"}:
             y -= 6
             c.setFont("Helvetica-Bold", 12)
             c.drawString(40, y, line)
@@ -1197,6 +1234,14 @@ def generate_agreement_pdf(booking: sqlite3.Row, case_path: Path) -> str:
     y -= 35
     c.setFont("Helvetica", 10)
     lines = [
+        "Uthyrare",
+        f"{SELLER_COMPANY} / {SELLER_BRAND}",
+        f"Organisationsnummer: {SELLER_ORG_NUMBER}",
+        f"Momsregistreringsnummer: {SELLER_VAT_NUMBER}",
+        f"Adress / utlämningsadress: {SELLER_ADDRESS}",
+        f"E-post: {SELLER_EMAIL}",
+        f"Telefon: {SELLER_PHONE}",
+        "",
         f"Bokning: #{booking['id']}",
         f"Hyrestagare: {booking['name']}",
         *customer_extra_lines(booking),
@@ -1307,10 +1352,14 @@ def generate_damage_invoice_pdf(booking: sqlite3.Row, case_path: Path, descripti
 
     c.setFont("Helvetica", 10)
     header_lines = [
+        *seller_invoice_lines(),
+        "",
         f"Skadefakturanummer: SK-{int(booking['id']):04d}",
         f"Utfärdad: {issue_date.isoformat()}",
         f"Betalas senast: {due_date.isoformat()} (14 dagar från utfärdande)",
         f"Bokning: #{booking['id']}",
+        "",
+        "Köpare / hyrestagare",
         f"Hyrestagare: {booking['name']}",
         *customer_extra_lines(booking),
         f"E-post: {booking['email']}",
@@ -1330,8 +1379,10 @@ def generate_damage_invoice_pdf(booking: sqlite3.Row, case_path: Path, descripti
     c.setFont("Helvetica", 10)
     draw_wrapped(c, description or "Ingen beskrivning angiven.", 40, y)
 
-    # Keep payment info clearly visible on the same page for normal short descriptions.
-    y = 455
+    y -= 18
+    if y < 280:
+        c.showPage()
+        y = 800
     c.setFont("Helvetica-Bold", 12)
     c.drawString(40, y, "Betalningsalternativ")
     y -= 18
