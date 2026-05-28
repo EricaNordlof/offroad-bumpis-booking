@@ -389,13 +389,6 @@ AFFILIATE_COUPONS = {
     "BLLACA": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BLLACA09": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
     "BEHAR-1026": {"name": "Behar Bllaca", "email": "b.bllaca86@hotmail.com"},
-
-    "YNGVE10": {"name": "Yngve Aniedeh", "email": "yngveaniedeh@gmail.com"},
-    "ANNIKA-1026": {"name": "Annika Nordlöf", "email": "annikanordlof@outlook.com"},
-    "EMIL-1026": {"name": "Emil Aniedeh", "email": "emil.aniedeh2009@gmail.com"},
-    "HJP-1026": {"name": "Hitta Jippo", "email": "Hittajippo@outlook.com"},
-    "KOMPASS-1026": {"name": "Oliver", "email": "oliverlon20020@gmail.com"},
-    "BUMPIS-4827": {"name": "Katusergo7", "email": "katusergo7@gmail.com"},
 }
 
 
@@ -521,6 +514,31 @@ def send_affiliate_paid_email(booking) -> None:
             "Offroad Bumpis"
         ),
     )
+
+
+def send_affiliate_cancelled_email(booking, reason: str) -> None:
+    """Notify affiliate that a booking did not go through and should not count for provision."""
+    coupon_code = booking_value(booking, "coupon_code")
+    affiliate = affiliate_for_coupon(coupon_code)
+    if not affiliate:
+        return
+
+    send_email(
+        affiliate["email"],
+        "Bokning avbruten med din rabattkod - Offroad Bumpis",
+        (
+            f"Hej {affiliate['name']}!\n\n"
+            f"En bokning med din rabattkod {normalize_coupon_code(coupon_code)} blev inte genomförd.\n\n"
+            f"Kund: {booking_value(booking, 'name', '-')}\n"
+            f"Kundens e-post: {booking_value(booking, 'email', '-')}\n"
+            f"Period: {format_period(booking_value(booking, 'start_date'), booking_value(booking, 'end_date'))}\n"
+            f"Orsak: {reason}\n\n"
+            "Den här bokningen räknas inte som genomförd och ger ingen provision.\n\n"
+            "Offroad Bumpis"
+        ),
+    )
+
+
 
 
 def ladder_price(count: int, ladder: dict[int, int]) -> int:
@@ -1200,7 +1218,7 @@ def release_unpaid_overdue_bookings() -> int:
     """Release direct bookings that are still unpaid after payment due date."""
     db = get_db()
     rows = db.execute(
-        "SELECT id, start_date FROM bookings WHERE status = 'booked_unpaid'"
+        "SELECT * FROM bookings WHERE status = 'booked_unpaid'"
     ).fetchall()
     released = 0
     today = date.today().isoformat()
@@ -1209,6 +1227,10 @@ def release_unpaid_overdue_bookings() -> int:
         if today > due:
             db.execute("UPDATE bookings SET status = 'released' WHERE id = ?", (row["id"],))
             released += 1
+            send_affiliate_cancelled_email(
+                row,
+                "Bokningen släpptes automatiskt eftersom betalning inte registrerades i tid.",
+            )
     if released:
         db.commit()
     return released
@@ -1798,6 +1820,10 @@ def admin_update_booking(booking_id: int, action: str):
             "Bokning släppt - Offroad Bumpis",
             f"Hej {booking['name']}!\n\nDin bokning för {format_period(booking['start_date'], booking['end_date'])} har släppts eftersom betalning inte är registrerad i tid.\n\nOffroad Bumpis",
         )
+        send_affiliate_cancelled_email(
+            booking,
+            "Bokningen släpptes eftersom betalning inte registrerades i tid.",
+        )
     elif action == "confirm":
         db.execute("UPDATE bookings SET status = 'booked_unpaid' WHERE id = ?", (booking_id,))
         db.commit()
@@ -1805,6 +1831,10 @@ def admin_update_booking(booking_id: int, action: str):
     elif action == "reject":
         db.execute("UPDATE bookings SET status = 'rejected' WHERE id = ?", (booking_id,))
         db.commit()
+        send_affiliate_cancelled_email(
+            booking,
+            "Bokningen avbröts eller nekades och räknas inte som genomförd.",
+        )
 
     return redirect(url_for("admin_bookings"))
 
