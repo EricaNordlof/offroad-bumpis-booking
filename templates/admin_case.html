@@ -15,7 +15,16 @@
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .check{display:flex;align-items:center;gap:10px;margin:9px 0;font-weight:700}
     .check input{width:auto}
-    @media(max-width:700px){.grid{grid-template-columns:1fr}}
+    .photo-drop{border:2px dashed #cbd5e1;background:#f8fafc;border-radius:14px;padding:14px;margin:10px 0 14px;cursor:pointer}
+    .photo-drop strong{display:block;margin-bottom:4px}
+    .photo-drop small{color:#475569}
+    .photo-drop.dragover{border-color:#111827;background:#ecfdf3}
+    .photo-drop input{margin-top:10px}
+    .photo-preview{font-size:13px;color:#334155;margin-top:8px;line-height:1.45}
+    .photo-list{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .photo-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px}
+    .photo-item code{display:block;margin-top:6px;font-size:11px}
+    @media(max-width:700px){.grid,.photo-list{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -64,9 +73,40 @@
     {% endif %}
   </div>
 
+  {% if handover_photos or return_photos %}
+  <div class="card">
+    <h2>Foton</h2>
+    <p>Foton sparas i caset och SHA-256-hashas. Klicka på ett foto för att öppna det.</p>
+
+    {% if handover_photos %}
+      <h3>Utlämning</h3>
+      <div class="photo-list">
+        {% for photo in handover_photos %}
+          <div class="photo-item">
+            <a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=photo.filename) }}">{{ photo.filename }}</a>
+            <code>{{ photo.hash }}</code>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if return_photos %}
+      <h3>Återlämning</h3>
+      <div class="photo-list">
+        {% for photo in return_photos %}
+          <div class="photo-item">
+            <a href="{{ url_for('serve_case_file', booking_id=booking.id, filename=photo.filename) }}">{{ photo.filename }}</a>
+            <code>{{ photo.hash }}</code>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="card">
     <h2>Digital utlämningskontroll</h2>
-    <form method="post" action="{{ url_for('admin_handover_control', booking_id=booking.id) }}">
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('admin_handover_control', booking_id=booking.id) }}">
       <div class="grid">
         <div>
           <label>Utlämnade barnbollar</label>
@@ -83,13 +123,22 @@
       <label class="check"><input type="checkbox" name="rules_reviewed"> Tillåtna underlag och säkerhetsregler är genomgångna</label>
       <label>Anteckningar</label>
       <textarea name="handover_notes" rows="4" placeholder="Exempel: allt OK, kunden fick pump och säkerhetsregler genomgångna..."></textarea>
+
+      <label>Foton vid utlämning</label>
+      <div class="photo-drop" data-input="handover_photos">
+        <strong>Dra in foton här eller klicka för att välja</strong>
+        <small>Du kan bifoga flera foton. JPG, PNG, WEBP, HEIC och HEIF accepteras.</small>
+        <input id="handover_photos" name="handover_photos" type="file" multiple accept="image/*,.heic,.heif">
+        <div class="photo-preview"></div>
+      </div>
+
       <button>Spara utlämningskontroll</button>
     </form>
   </div>
 
   <div class="card">
     <h2>Digital återlämningskontroll</h2>
-    <form method="post" action="{{ url_for('admin_return_control', booking_id=booking.id) }}">
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('admin_return_control', booking_id=booking.id) }}">
       <div class="grid">
         <div>
           <label>Återlämnade barnbollar</label>
@@ -106,6 +155,15 @@
       <label class="check"><input type="checkbox" name="damage_invoice_needed"> Skadefaktura behöver skapas</label>
       <label>Anteckningar</label>
       <textarea name="return_notes" rows="4" placeholder="Exempel: allt OK, eller 1 boll smutsig, ventil behöver kollas..."></textarea>
+
+      <label>Foton vid återlämning</label>
+      <div class="photo-drop" data-input="return_photos">
+        <strong>Dra in foton här eller klicka för att välja</strong>
+        <small>Du kan bifoga flera foton. JPG, PNG, WEBP, HEIC och HEIF accepteras.</small>
+        <input id="return_photos" name="return_photos" type="file" multiple accept="image/*,.heic,.heif">
+        <div class="photo-preview"></div>
+      </div>
+
       <button>Spara återlämningskontroll</button>
     </form>
   </div>
@@ -123,5 +181,54 @@
   </div>
   {% endif %}
   <p><a href="{{ url_for('admin_bookings') }}">Tillbaka</a></p>
+
+<script>
+  document.querySelectorAll(".photo-drop").forEach((dropzone) => {
+    const input = document.getElementById(dropzone.dataset.input);
+    const preview = dropzone.querySelector(".photo-preview");
+
+    function updatePreview() {
+      const files = Array.from(input.files || []);
+      if (!files.length) {
+        preview.textContent = "";
+        return;
+      }
+      preview.innerHTML = files.map((file) => `Valt foto: ${file.name}`).join("<br>");
+    }
+
+    dropzone.addEventListener("click", (event) => {
+      if (event.target !== input) {
+        input.click();
+      }
+    });
+
+    input.addEventListener("change", updatePreview);
+
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("dragover");
+      });
+    });
+
+    dropzone.addEventListener("drop", (event) => {
+      const droppedFiles = Array.from(event.dataTransfer.files || []).filter((file) => file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name));
+      const transfer = new DataTransfer();
+
+      Array.from(input.files || []).forEach((file) => transfer.items.add(file));
+      droppedFiles.forEach((file) => transfer.items.add(file));
+
+      input.files = transfer.files;
+      updatePreview();
+    });
+  });
+</script>
 </body>
 </html>
