@@ -677,6 +677,93 @@ def hash_file(path: Path | str) -> str:
 def generate_verification_token() -> str:
     return secrets.token_urlsafe(18)
 
+    PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+
+
+def clean_filename_part(value: str) -> str:
+    """Make a simple safe filename part."""
+    value = file_basename(value or "")
+    stem = Path(value).stem
+    cleaned = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in stem)
+    return cleaned.strip("._") or "foto"
+
+
+def save_uploaded_photos(booking_id: int, field_name: str, category: str) -> list[dict[str, str]]:
+    """Save uploaded case photos and return filename/hash records.
+
+    category should be:
+    - utlamning
+    - aterlamning
+    """
+    case_path = ensure_case_directory(booking_id)
+    saved: list[dict[str, str]] = []
+
+    for upload in request.files.getlist(field_name):
+        if not upload or not upload.filename:
+            continue
+
+        original_name = file_basename(upload.filename)
+        ext = Path(original_name).suffix.lower()
+
+        if ext not in PHOTO_EXTENSIONS:
+            continue
+
+        safe_part = clean_filename_part(original_name)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"foto_{category}_{timestamp}_{secrets.token_hex(4)}_{safe_part}{ext}"
+        target = case_path / filename
+
+        upload.save(target)
+
+        saved.append(
+            {
+                "filename": filename,
+                "hash": hash_file(target),
+            }
+        )
+
+    return saved
+
+
+def photo_records_for_case(booking_id: int, category: str) -> list[dict[str, str]]:
+    """Return saved photo records for one case/category."""
+    case_path = ensure_case_directory(booking_id)
+    prefix = f"foto_{category}_"
+    photos: list[dict[str, str]] = []
+
+    if not case_path.exists():
+        return photos
+
+    for path in sorted(case_path.iterdir(), key=lambda p: p.name):
+        if not path.is_file():
+            continue
+        if not path.name.startswith(prefix):
+            continue
+        if path.suffix.lower() not in PHOTO_EXTENSIONS:
+            continue
+
+        photos.append(
+            {
+                "filename": path.name,
+                "hash": hash_file(path),
+            }
+        )
+
+    return photos
+
+
+def photo_hashes_for_case(booking_id: int) -> dict[str, str]:
+    """Return photo hashes in the same format as hash register expects."""
+    hashes: dict[str, str] = {}
+
+    for photo in photo_records_for_case(booking_id, "utlamning"):
+        hashes[f"foto_utlamning_{photo['filename']}"] = photo["hash"]
+
+    for photo in photo_records_for_case(booking_id, "aterlamning"):
+        hashes[f"foto_aterlamning_{photo['filename']}"] = photo["hash"]
+
+    return hashes
+
 
 def generate_hash_register_pdf(booking, case_path: Path, hashes: dict[str, str], verification_token: str) -> str:
     """Create a separate verification PDF listing SHA-256 hashes for all generated documents."""
