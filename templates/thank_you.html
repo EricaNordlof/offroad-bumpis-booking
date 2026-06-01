@@ -19,7 +19,10 @@
     <p>Din bokning för {{ date }} är mottagen.</p>
     <p>Faktura och betalningsuppgifter har skickats till din e-post. Betalning ska vara inne senast {{ due_date }}, alltså 3 arbetsdagar före utlämning.</p>
     <p>Om betalning inte kommer in i tid släpps bokningen automatiskt.</p>
-    <p><a href="{{ url_for('booking_form') }}">Tillbaka till bokningssidan</a></p>
+    <p>
+  <a href="{{ url_for('booking_form') }}">Tillbaka till bokningssidan</a><br><br>
+  <a href="https://offroadbumpis.se/">Tillbaka till hemsidan</a>
+</p>
   </div>
 </body>
 </html>
