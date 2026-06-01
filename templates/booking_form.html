@@ -121,6 +121,14 @@
       background:#020617;
     }
 
+    .home-button {
+  background:var(--green);
+}
+
+.home-button:hover {
+  background:var(--green-dark);
+}
+
     .row {
       display:grid;
       grid-template-columns:1fr 1fr;
@@ -551,9 +559,10 @@
       </div>
 
       <div class="actions">
-        <button type="submit">Boka nu</button>
-        <a class="button" href="{{ url_for('calendar_view') }}">Visa kalender</a>
-      </div>
+  <button type="submit">Boka nu</button>
+  <a class="button" href="{{ url_for('calendar_view') }}">Visa kalender</a>
+  <a class="button home-button" href="https://offroadbumpis.se/">Tillbaka till hemsidan</a>
+</div>
     </form>
 
     <div class="read-more">
