@@ -1548,7 +1548,7 @@ def booking_form():
         booking_id = cur.lastrowid
         db.commit()
 
-                case = create_safe_case_for_booking(booking_id)
+        case = create_safe_case_for_booking(booking_id)
         period_text = format_period(start_date, end_date)
         due_date = business_days_before(start_date, 3)
         invoice_file = case["payment_invoice_file"] if case and case["payment_invoice_file"] else None
