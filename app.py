@@ -1548,16 +1548,43 @@ def booking_form():
         booking_id = cur.lastrowid
         db.commit()
 
-        case = create_safe_case_for_booking(booking_id)
+                case = create_safe_case_for_booking(booking_id)
         period_text = format_period(start_date, end_date)
         due_date = business_days_before(start_date, 3)
         invoice_file = case["payment_invoice_file"] if case and case["payment_invoice_file"] else None
         verify_url = url_for("public_verify", token=case["verification_token"], _external=True) if case and case["verification_token"] else ""
-        customer_email_lines = f"Bokar som: {'Företag' if customer_type == 'company' else 'Privatperson'}\n"
+
+        selected_addons_text = ", ".join(
+            ADDON_LABELS[k]
+            for k, selected in {
+                "tournament_kit": tournament_kit,
+                "car_rental": car_rental,
+                "cargo_bike": cargo_bike,
+            }.items()
+            if selected
+        ) or "-"
+
+        discount_email_lines = ""
+        if discount_percent > 0:
+            discount_email_lines = (
+                f"Pris före rabatt: {subtotal} kr\n"
+                f"Rabattkod: {coupon_code}\n"
+                f"Rabatt: {discount_percent}% (-{discount_amount} kr)\n"
+            )
+
+        customer_company_lines = ""
         if customer_type == "company":
-            customer_email_lines += f"Företag: {company_name}\n"
-            customer_email_lines += f"Organisationsnummer: {org_number or '-'}\n"
-            customer_email_lines += f"Fakturareferens/PO: {invoice_reference or '-'}\n"
+            customer_company_lines = (
+                f"Företag: {company_name}\n"
+                f"Organisationsnummer: {org_number or '-'}\n"
+                f"Fakturareferens/PO: {invoice_reference or '-'}\n"
+            )
+
+        admin_customer_lines = f"Kundtyp: {'Företag' if customer_type == 'company' else 'Privatperson'}\n"
+        if customer_type == "company":
+            admin_customer_lines += customer_company_lines
+
+        admin_verify_line = f"\nVerifiering: {verify_url}" if verify_url else ""
 
         send_email(
             email,
@@ -1565,27 +1592,27 @@ def booking_form():
             (
                 f"Hej {name}!\n\n"
                 f"Din bokning för {period_text} är reserverad.\n\n"
+                f"{customer_company_lines}"
                 f"Hyresdagar/prisdagar: {rental_days}\n"
                 f"Barnbollar: {child_count}\n"
                 f"Vuxenbollar: {adult_count}\n"
-                f"Pris före rabatt: {subtotal} kr\n"
-                f"Rabattkod: {coupon_code or '-'}\n"
-                f"Rabatt: {discount_percent}% (-{discount_amount} kr)\n"
+                f"{discount_email_lines}"
                 f"Pris att betala: {estimated_price} kr\n"
                 f"Leverans: {'Ja' if deliver else 'Nej'}\n"
                 f"Återleverans/hämtning efteråt: {'Ja' if return_delivery else 'Nej'}\n"
                 f"Leveranszon: {DELIVERY_ZONES[delivery_zone]['label']}\n"
-                f"Tillval: {', '.join([ADDON_LABELS[k] for k, selected in {'tournament_kit': tournament_kit, 'car_rental': car_rental, 'cargo_bike': cargo_bike}.items() if selected]) or '-'}\n\n"
+                f"Tillval: {selected_addons_text}\n\n"
                 f"Fakturan/betalningsuppgifterna finns bifogad som PDF.\n"
                 f"Betala senast {due_date}, alltså senast 3 arbetsdagar före utlämning.\n"
                 f"Meddelande/OCR vid banköverföring eller Swish: {phone}\n\n"
-                f"Betalning kan göras via Swish, banköverföring eller Stripe/kort/Klarna:\n{PAYMENT_STRIPE_URL}\n\n"
+                f"Betalning kan göras via Swish, banköverföring eller Stripe/kort/Klarna:\n"
+                f"{PAYMENT_STRIPE_URL}\n\n"
                 "Om betalning inte kommer in i tid släpps bokningen.\n\n"
-                f"Verifiering av dokument: {verify_url}\n\n"
                 "Offroad Bumpis"
             ),
             attachments=[invoice_file] if invoice_file else None,
         )
+
         send_email(
             ADMIN_EMAIL,
             "Ny direktbokning - Offroad Bumpis",
@@ -1601,20 +1628,23 @@ def booking_form():
                 f"Pris att betala: {estimated_price} kr\n"
                 f"Betalas senast: {due_date}\n"
                 f"Kund: {name}\n"
+                f"{admin_customer_lines}"
                 f"E-post: {email}\n"
                 f"Telefon/OCR: {phone}\n"
                 f"Plats: {location or '-'}\n"
                 f"Leverans: {'Ja' if deliver else 'Nej'}\n"
                 f"Återleverans/hämtning efteråt: {'Ja' if return_delivery else 'Nej'}\n"
                 f"Leveranszon: {DELIVERY_ZONES[delivery_zone]['label']}\n"
-                f"Tillval: {', '.join([ADDON_LABELS[k] for k, selected in {'tournament_kit': tournament_kit, 'car_rental': car_rental, 'cargo_bike': cargo_bike}.items() if selected]) or '-'}\n"
+                f"Tillval: {selected_addons_text}\n"
                 f"Meddelande: {message or '-'}\n\n"
-                f"Case och faktura är skapade automatiskt. Verifiering: {verify_url}"
+                f"Case och faktura är skapade automatiskt.{admin_verify_line}"
             ),
         )
+
         fresh_booking = db.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
         if coupon_code:
             send_affiliate_booking_email(fresh_booking, coupon_code)
+
         return render_template("thank_you.html", date=period_text, due_date=due_date)
 
     return render_template(
